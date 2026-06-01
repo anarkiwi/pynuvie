@@ -24,16 +24,21 @@ def test_flibug_sets_body_and_flag():
 
 def test_flibug_changes_displayer_per_content():
     """flibug regenerates the per-frame displayer ($1000-$1ee3) from the body's
-    colour table, so differently-coloured frames yield different displayers."""
-    from nuvie.nufli import NufliImage
+    colour table, so differently-coloured frames yield different displayers.
 
-    plain = build_slot(NufliImage.from_image(_img((0, 0, 0)), flibug=False))
-    blue = build_slot(NufliImage.from_image(_img((0, 0, 200)), flibug=True))
-    red = build_slot(NufliImage.from_image(_img((200, 0, 0)), flibug=True))
-    assert len(blue) == SLOT_SIZE
-    assert blue != plain
+    Uses exact C64 palette colours so the (mufflon-faithful, luma-weighted) colour
+    search keeps them distinct -- arbitrary saturated RGB can both collapse onto the
+    same low-luma colour under the 0.299/0.587/0.114 weighting."""
+    from nuvie.nufli import NufliImage
+    from nuvie.palette import C64_PALETTE
+
+    plain = build_slot(NufliImage.from_image(_img(C64_PALETTE[0]), flibug=False))
+    green = build_slot(NufliImage.from_image(_img(C64_PALETTE[5]), flibug=True))
+    yellow = build_slot(NufliImage.from_image(_img(C64_PALETTE[7]), flibug=True))
+    assert len(green) == SLOT_SIZE
+    assert green != plain
     # left-edge content differs -> different packed slots
-    assert blue != red
+    assert green != yellow
 
 
 def test_flibug_implies_two_colour():

@@ -134,7 +134,7 @@ class NufliImage:
 
     @classmethod
     def from_image(cls, img, third_colour: bool = True, dither: bool = False,
-                   flibug: bool = False) -> "NufliImage":
+                   flibug: bool = False, match_mufflon: bool = True) -> "NufliImage":
         """Encode a Pillow image into a NUFLI graphics image, mufflon-free.
 
         Produces the hi-res bitmap + per-8x2 FLI ink/paper, and (when
@@ -142,6 +142,15 @@ class NufliImage:
         colour. With ``dither`` the image is Floyd-Steinberg dithered to the C64
         palette first (mufflon's video look). Round-trips through
         :meth:`decode_indices`.
+
+        With ``match_mufflon`` (default) the full-colour path uses the byte-exact
+        port of mufflon's colour optimiser (see :mod:`nuvie._mufflon`): for any
+        input whose pixels are exact Pepto-palette colours the bitmap, FLI screen
+        RAM, main sprite bitmaps and sprite colour table are **byte-identical** to
+        Crest's mufflon ``--otype nufli``. (For arbitrary RGB the only differences
+        are mufflon's ``-ffast-math`` 1-ULP rounding flips, which are compiler- not
+        algorithm-dependent.) Set ``match_mufflon=False`` for the older, faster
+        heuristic encoder.
 
         With ``flibug`` the leftmost-24px sprite plane is generated (see
         :mod:`nuvie._flibug`) so the left edge renders cleanly on the reference
@@ -155,6 +164,22 @@ class NufliImage:
 
         if dither:
             img = dither_to_palette(img)
+
+        if match_mufflon and third_colour:
+            import numpy as np
+
+            from ._mufflon import encode_body
+
+            rgb = np.asarray(img.convert("RGB").resize((WIDTH, HEIGHT)), dtype=np.uint8)
+            body = bytearray(encode_body(rgb))
+            if flibug:
+                from ._flibug import encode_flibug
+
+                encode_flibug(img, body, has_main=True)
+            obj = cls(bytes(body))
+            obj.flibug = flibug
+            return obj
+
         bitmap, screen = encode_hires(img)
         o1, l1 = _BITMAP_HI
         o2, l2 = _BITMAP_LO
