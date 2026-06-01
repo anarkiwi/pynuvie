@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pynuvie"
+dynamic = ["version"]
+description = "Read, write and document Commodore 64 NUVIE REU video files."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Josh Bailey", email = "josh@overlyspecific.com" }]
+keywords = ["c64", "commodore", "nuvie", "nufli", "reu", "video", "retrocomputing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: System :: Emulators",
+]
+dependencies = []
+
+[project.optional-dependencies]
+image = ["Pillow>=9.0", "numpy>=1.20"]
+dev = ["pytest>=7", "pytest-cov", "Pillow>=9.0", "numpy>=1.20", "build", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/anarkiwi/pynuvie"
+Repository = "https://github.com/anarkiwi/pynuvie"
+"Format documentation" = "https://github.com/anarkiwi/pynuvie/blob/main/docs/FORMAT.md"
+
+[project.scripts]
+nuvie = "nuvie.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nuvie = ["data/*.json", "data/*.bin"]
+
+[tool.setuptools_scm]
+version_scheme = "no-guess-dev"
+local_scheme = "no-local-version"
+fallback_version = "0.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
