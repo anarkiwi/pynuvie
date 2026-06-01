@@ -1,12 +1,21 @@
-"""mufflon's ``prepare()`` colour dithering, ported faithfully.
+"""mufflon's ``prepare()`` colour dithering, ported.
 
-mufflon's perceptual quality comes mostly from this step: it dithers the image to
-the C64 **Pepto** palette with Floyd-Steinberg error diffusion performed in **YUV**
-space using per-channel weights (the makenuvie default ``--prep_mode yuv
---weight_u 1 --weight_v 0.5``). The error is weighted before distribution and the
-nearest-colour search is weighted too -- reproduced exactly here so output matches
-mufflon's. The result is an image whose pixels are Pepto colours, ready for the
-NUFLI encoder. Validated against mufflon's own output on the reference player.
+A faithful transliteration of mufflon's default video preprocessing
+(``-p --dither --prep_mode yuv --weight_u 1 --weight_v 0.5``, ``solid_only`` on):
+left-to-right Floyd-Steinberg error diffusion in **YUV** space against the 16
+solid C64 **Pepto** colours, with per-channel weights ``(1, 1, 0.5)``. The
+nearest-colour distance is the weighted L1 in YUV **truncated to int** (mufflon's
+``compare_2cols`` returns ``int``), the quantisation error is pre-multiplied by the
+weights (a mufflon quirk), and the error is spread 7/16, 3/16, 5/16, 1/16. The
+result is an image whose pixels are exact Pepto colours, ready for the NUFLI
+encoder (see :mod:`nuvie._mufflon`).
+
+Note on parity: this matches mufflon's *algorithm*, not its bytes. Floyd-Steinberg
+is chaotic -- any 1-ULP difference (mufflon ships built with ``-ffast-math``)
+propagates and diverges the dither across most pixels. So the quality matches
+mufflon's but the dithered pixels are not byte-identical (and need not be: the
+downstream encoder is the byte-exact part). ``adjust_colors_rgb`` is an identity at
+mufflon's default brightness/contrast/gamma/saturation, so it is not applied.
 """
 
 from __future__ import annotations
@@ -43,7 +52,10 @@ def dither(img):
         nxt = data[y + 1] if y + 1 < HEIGHT else None
         for x in range(WIDTH):
             v = row[x]
-            c = int((np.abs(v - pal) * w).sum(1).argmin())
+            # mufflon compare_2cols returns int -> truncate the weighted L1 distance
+            # before picking the nearest (first index wins on a tie).
+            dist = (np.abs(v - pal) * w).sum(1).astype(np.int64)
+            c = int(dist.argmin())
             out[y, x] = c
             qe = (v - pal[c]) * w  # weighted error (mufflon's prepare quirk)
             if x + 1 < WIDTH:
