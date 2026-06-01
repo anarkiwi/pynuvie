@@ -137,7 +137,28 @@ frame's C64 memory image from its slot for analysis.
 For the **standalone** NUFLI `.prg` ("`.nuf`") format produced by `mufflon`
 (load address `$2000`, 0x5A00 bytes), `pynuvie`'s `nuvie.nufli` decodes the
 hi-res bitmap + FLI screen RAM to a 320×200 grid of palette indices; the byte
-offsets there come directly from the `mufflon` source.
+offsets there come directly from the `mufflon` source. `NufliImage.from_image`
+**encodes** an image back into that layout (per-8×2 two-colour FLI, all 16
+colours across the frame) — a pure-Python, mufflon-free NUFLI encoder, verified
+to round-trip exactly through the decoder.
+
+### Player display layout and the colour caveat
+
+The reference player relocates a frame into VIC bank 3 and double-buffers it.
+Confirmed by tracing its REU→C64 DMA and by playing crafted REUs:
+
+* the hi-res **bitmap** is at C64 `$E000`–`$FF40` (standard hi-res byte order);
+* **FLI screen RAM** is spread through `$C000`–`$D5FF`;
+* the player adds colour through a **hi-res sprite underlay**, not only the FLI
+  screen pair — so the displayed colour of a set bitmap bit is driven by the
+  sprite plane.
+
+`pynuvie`'s encoder writes a frame's bitmap into the slot exactly (placement is
+correct and verified in the real player). Reproducing full per-region NUFLI
+**colour** in the slot additionally requires emitting the FLI screen pairs *and*
+the sprite-underlay plane in the player's exact layout; that mapping is only
+partially recovered, so `nuvie.encode` currently emits two-colour frames. The
+standalone `NufliImage.from_image` encoder (above) is full per-8×2 colour.
 
 ## Sources
 

@@ -47,3 +47,32 @@ def test_decode_dimensions():
     px = NufliImage(bytes(NUFLI_BODY_SIZE)).decode_indices()
     assert len(px) == 200
     assert all(len(row) == 320 for row in px)
+
+
+def test_from_image_roundtrip_and_constraints():
+    pytest = __import__("pytest")
+    pytest.importorskip("PIL")
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (320, 200), (0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle([20, 20, 150, 100], fill=(255, 0, 0))
+    d.ellipse([170, 30, 300, 160], fill=(0, 200, 80))
+    nuf = NufliImage.from_image(img)
+    dec = nuf.decode_indices()
+    # encoding the decoded image must reproduce the same bytes (stable codec)
+    assert NufliImage.from_image(nuf.to_image()).body == nuf.body
+    # every 8x2 block uses at most two colours (the FLI constraint)
+    for by in range(100):
+        for cx in range(40):
+            cols = {dec[by * 2 + dy][cx * 8 + dx] for dy in range(2) for dx in range(8)}
+            assert len(cols) <= 2
+    # a colourful image must use more than two colours overall
+    assert len({v for row in dec for v in row}) > 2
+
+
+def test_to_prg_has_load_address():
+    nuf = NufliImage(bytes(NUFLI_BODY_SIZE))
+    prg = nuf.to_prg()
+    assert prg[:2] == b"\x00\x20"
+    assert len(prg) == NUFLI_BODY_SIZE + 2

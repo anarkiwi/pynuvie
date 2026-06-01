@@ -38,11 +38,15 @@ movie.set_frame(0, slot)
 movie.write("out.reu")               # losslessly round-trips
 ```
 
-Decode a standalone NUFLI `.nuf` image (e.g. `mufflon` output) to a picture:
+Decode a standalone NUFLI `.nuf` image (e.g. `mufflon` output) to a picture, and
+encode one back (pure-Python NUFLI, no `mufflon` — per-8×2 two-colour FLI):
 
 ```python
 from nuvie.nufli import NufliImage
 NufliImage.from_prg(open("000.nuf", "rb").read()).to_image().save("000.png")
+
+from PIL import Image
+NufliImage.from_image(Image.open("photo.png"))   # -> full-colour NUFLI graphics
 ```
 
 Encode a video into a NUVIE with no `mufflon`:

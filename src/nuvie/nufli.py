@@ -82,6 +82,31 @@ class NufliImage:
             data = data[2:]
         return cls(data)
 
+    @classmethod
+    def from_image(cls, img) -> "NufliImage":
+        """Encode a Pillow image into a NUFLI graphics image (hi-res, per-8x2
+        two colours -- no sprite-underlay third colour). Round-trips exactly with
+        :meth:`decode_indices`. This is the pure-Python, mufflon-free NUFLI encoder.
+        """
+        from ._hires import encode_hires
+
+        bitmap, screen = encode_hires(img)
+        o1, l1 = _BITMAP_HI
+        o2, l2 = _BITMAP_LO
+        body = bytearray(NUFLI_BODY_SIZE)
+        body[o1 : o1 + l1] = bitmap[0:l1]
+        body[o2 : o2 + l2] = bitmap[l1 : l1 + l2]
+        for by in range(len(screen)):
+            for cx in range(40):
+                ink, paper = screen[by][cx]
+                body[NUIFLI_SCRAM[by] + cx] = ((ink & 0xF) << 4) | (paper & 0xF)
+        return cls(bytes(body))
+
+    def to_prg(self) -> bytes:
+        """Serialise as a NUFLI graphics ``.prg`` (2-byte ``$2000`` load address +
+        body). Note: this carries graphics only, not a displayer routine."""
+        return bytes([NUFLI_LOAD_ADDR & 0xFF, NUFLI_LOAD_ADDR >> 8]) + self.body
+
     def bitmap(self) -> bytes:
         """The logical 8000-byte hi-res bitmap, reassembled from its two runs."""
         o1, l1 = _BITMAP_HI
