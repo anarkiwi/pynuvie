@@ -422,10 +422,14 @@ def _render(st: _State, costpad) -> np.ndarray:
     return hires, spr_bm
 
 
-def encode_body(rgb: np.ndarray) -> bytearray:
+def encode_body(rgb: np.ndarray, return_sprite_tab: bool = False):
     """Encode an exact-Pepto ``(200,320,3)`` RGB array to a NUFLI body
     (``$2000..$7A00``) byte-identical to mufflon's non-flibug graphics regions:
-    hi-res bitmap, FLI screen RAM, main sprite bitmaps and sprite colour table."""
+    hi-res bitmap, FLI screen RAM, main sprite bitmaps and sprite colour table.
+
+    With ``return_sprite_tab`` also returns the *un-wiped* 101x6 sprite colour
+    table (mufflon ``final_sprite_tab``, 0xFF = unused), which the flibug encoder
+    needs to compute the shared switch budget (see :mod:`nuvie._flibug`)."""
     cost = _cost_array(rgb)                       # (200,320,16)
     costpad = _padded_cost(cost)                  # (200,320,17), index 16 == INF
     st = _State()
@@ -456,4 +460,6 @@ def encode_body(rgb: np.ndarray) -> bytearray:
     addr_map = _sprite_addr_map()
     for (yy, col), addr in addr_map.items():
         body[addr] = int(spr_bm[yy * 18 + col])
+    if return_sprite_tab:
+        return body, st.final.copy()  # un-wiped (0xFF == unused)
     return body

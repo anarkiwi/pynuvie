@@ -171,11 +171,12 @@ class NufliImage:
             from ._mufflon import encode_body
 
             rgb = np.asarray(img.convert("RGB").resize((WIDTH, HEIGHT)), dtype=np.uint8)
-            body = bytearray(encode_body(rgb))
+            body_bytes, sprite_tab = encode_body(rgb, return_sprite_tab=True)
+            body = bytearray(body_bytes)
             if flibug:
                 from ._flibug import encode_flibug
 
-                encode_flibug(img, body, has_main=True)
+                encode_flibug(img, body, has_main=True, sprite_tab=sprite_tab)
             obj = cls(bytes(body))
             obj.flibug = flibug
             return obj

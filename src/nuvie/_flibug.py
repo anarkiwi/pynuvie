@@ -82,7 +82,7 @@ def _bitmap_off(logical: int) -> int:
     return (0x4000 + logical) if logical < 0x1400 else (0x1400 + logical - 0x1400)
 
 
-def encode_flibug(img, body: bytearray, has_main: bool = False) -> None:
+def encode_flibug(img, body: bytearray, has_main: bool = False, sprite_tab=None) -> None:
     """Fill ``body`` with the flibug plane for the target image ``img`` (Pillow,
     resized to 320x200). ``body`` already holds the main FLI encode; this overlays
     the left-24px bitmap/ink-paper, the two sprite bitmaps, the colour table and
@@ -92,7 +92,9 @@ def encode_flibug(img, body: bytearray, has_main: bool = False) -> None:
     With ``has_main`` the body already carries the 3rd-colour underlay's per-line
     sprite colours in the colour table; the flibug colour switches are woven only
     into free slots (columns whose main colour is unchanged), so the underlay and
-    the flibug coexist."""
+    the flibug coexist. ``sprite_tab`` is the main encoder's un-wiped 101x6 sprite
+    colour table (0xFF = unused); it gives the per-line switch budget that bounds
+    how many flibug colours may change (mufflon ``free_switches_flibug``)."""
     import numpy as np
     from ._displayer import COLOUR_COLS
 
@@ -150,40 +152,100 @@ def encode_flibug(img, body: bytearray, has_main: bool = False) -> None:
             ip.append((bi, bp))
         return total, ip
 
-    def pick_colours(lp):
-        """Choose the 4 sprite colours minimising the line cost (bounded search
-        over the colours actually present in the left 24px)."""
+    # per-line flibug switch budget (mufflon find_free_register_switches /
+    # free_switches_flibug): a colour-table column is a free switch slot on line lp
+    # if its main sprite colour is unchanged from lp-1 (or unused, 0xFF); column 0
+    # is reserved, so the flibug budget is the free slots in columns 1..5. This caps
+    # how many of the 4 flibug colours may change per line, which is what keeps them
+    # stable across a region (mufflon's continuity).
+    if sprite_tab is not None:
+        tab = [[int(sprite_tab[lp][b]) for b in range(6)] for lp in range(101)]
+    else:  # no 3rd-colour underlay: every slot is unused (0xFF) -> all free
+        tab = [[0xFF] * 6 for _ in range(101)]
+    free_slots = []
+    for lp in range(100):
+        n = 0
+        for b in range(1, 6):  # column 0 reserved (mufflon free_switches_flibug)
+            if lp == 0 or tab[lp][b] == tab[lp - 1][b] or tab[lp][b] == 0xFF:
+                n += 1
+        free_slots.append(n)
+
+    # per-line present colours (mufflon flibug_col_is_used): the brute-force only
+    # ever considers colours that actually appear in that line-pair's left 24px,
+    # plus "unused" (-1). Restricting to present colours is what stops the search
+    # spending a sprite colour on an absent saturated value (which renders as a
+    # full-width streak) and is exactly mufflon's candidate set.
+    present = []
+    for lp in range(100):
+        s = set()
+        for yy in (lp * 2, lp * 2 + 1):
+            for b in range(3):
+                s |= used[yy][b]
+        present.append(sorted(s) + [-1])
+
+    # --- per-line flibug colour search, ported from mufflon find_best_colors_flibug ---
+    # mufflon brute-forces the 4 flibug sprite colours (hires + 3 multicolour) per
+    # line over the present colours, scoring with find_best_colors_line over
+    # combinations_flibug, and carries colours forward (continuity) -- changing at
+    # most as many as there are free switch slots that line, preferring not to spend
+    # a colour on $0f (which AFLI shows for free).
+    def pick_colours(lp, prev, navail):
         y = lp * 2
-        cnt = {}
-        for x in range(FLI):
-            for yy in (y, y + 1):
-                c = int(nearest[yy, x])
-                cnt[c] = cnt.get(c, 0) + 1
-        pool = [c for c, _ in sorted(cnt.items(), key=lambda kv: -kv[1])][:4]
-        if not pool:
-            return [-1, -1, -1, -1]
-        # seed: most-used colour in every channel, then try swapping each channel
-        # to other pool colours / unused -- cheap hill-climb, good for left edges.
-        best = [pool[0]] * 4
+        cands = present[lp]
+        seed = [c if c in cands else cands[0] for c in prev]
+        if all(c < 0 for c in prev):  # first line: seed from the most-used colours
+            cnt = {}
+            for x in range(FLI):
+                for yy in (y, y + 1):
+                    cnt[int(nearest[yy, x])] = cnt.get(int(nearest[yy, x]), 0) + 1
+            top = [c for c, _ in sorted(cnt.items(), key=lambda kv: -kv[1])]
+            seed = (top + [top[0] if top else 0] * 4)[:4]
+        best = list(seed)
         best_cost = line_cost(lp, best)[0]
-        for _ in range(2):
+        afli = (y & 7) < 2
+        for _ in range(3):
+            improved = False
             for i in range(4):
-                for cand in pool + [-1]:
+                cur_c, cur_cost = best[i], best_cost
+                for cand in cands:
                     if cand == best[i]:
                         continue
                     trial = list(best)
                     trial[i] = cand
                     c = line_cost(lp, trial)[0]
-                    if c < best_cost:
-                        best_cost, best = c, trial
+                    if c < cur_cost or (
+                        c == cur_cost and not afli and cur_c == 0x0F and 0 <= cand != 0x0F
+                    ):
+                        cur_cost, cur_c = c, cand
+                if cur_c != best[i]:
+                    best[i], best_cost = cur_c, cur_cost
+                    improved = True
+            if not improved:
+                break
+        # continuity / switch budget: keep at most navail changes vs prev so every
+        # colour change has a free table slot (drop the least valuable changes).
+        if navail < 4 and any(c >= 0 for c in prev):
+            base = line_cost(lp, best)[0]
+
+            def revert_delta(i):
+                t = list(best)
+                t[i] = prev[i]
+                return line_cost(lp, t)[0] - base
+
+            changed = [i for i in range(4) if best[i] != prev[i]]
+            if len(changed) > navail:
+                for i in sorted(changed, key=revert_delta)[: len(changed) - navail]:
+                    best[i] = prev[i]
         return best
 
     fb: List[List[int]] = []
     inkpap = []
+    prev = [-1, -1, -1, -1]
     for lp in range(100):
-        c = pick_colours(lp)
+        c = pick_colours(lp, prev, free_slots[lp])
         fb.append(c)
         inkpap.append(line_cost(lp, c)[1])
+        prev = c
 
     # render: per-pixel channel choice -> bitmaps + ink/paper
     for lp in range(100):
