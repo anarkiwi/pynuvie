@@ -83,11 +83,30 @@ def _graphics_offsets() -> frozenset:
 
 def build_slot(image: NufliImage) -> bytes:
     """Pack a :class:`~nuvie.nufli.NufliImage` into a 21840-byte NUVIE frame slot
-    (part 1 + part 2) that plays on the reference player."""
+    (part 1 + part 2) that plays on the reference player.
+
+    When the image was encoded with ``flibug`` (``NufliImage.from_image(flibug=
+    True)``) the body carries a generated flibug plane (sprite bitmaps + a 6-column
+    colour table); the per-frame displayer is regenerated from that table (see
+    :mod:`nuvie._displayer`) and spliced in, so the left 24px renders the picture
+    instead of VIC FLI-bug corruption. Otherwise the displayer template is kept."""
     src = bytearray(_pack_source())  # C64 $1000..$7A00
     body = image.body
     for o in _graphics_offsets():  # overlay the encoder's graphics (C64 $2000+o)
         src[o + 0x1000] = body[o]
+    if getattr(image, "flibug", False):
+        from ._displayer import generate, DISPLAYER_LEN, COLOUR_COLS
+        from ._flibug import _sprite_offsets
+
+        # overlay the flibug graphics the main _graphics_offsets pass doesn't cover
+        ho, mo = _sprite_offsets()
+        extra = {o for row in ho for o in row} | {o for row in mo for o in row}
+        for base in COLOUR_COLS:
+            extra.update(range(base - 1, base + 101))
+        extra.update((0x1FF0, 0x1FF1, 0x1FF6, 0x1FF7))
+        for o in extra:
+            src[o + 0x1000] = body[o]
+        src[0:DISPLAYER_LEN] = generate(body)  # regenerate displayer ($1000-$1ee3)
     slot = bytearray(SLOT_SIZE)
     slot[0:PART1_LEN] = src[PART1_C64 - SOURCE_BASE : PART1_C64 - SOURCE_BASE + PART1_LEN]
     for d in _pack_table():
@@ -110,18 +129,21 @@ def _sequential_playlist(n: int):
 
 
 def build_movie(images, out_path: Optional[str] = None, third_colour: bool = True,
-                dither: bool = False) -> Nuvie:
+                dither: bool = False, flibug: bool = True) -> Nuvie:
     """Encode an iterable of Pillow images into a full-colour NUVIE.
 
     Each image is NUFLI-encoded and packed into its slot; a sequential
-    play-through playlist is generated.
+    play-through playlist is generated. With ``flibug`` (default) the left-24px
+    edge is generated (see :mod:`nuvie._flibug` / :mod:`nuvie._displayer`) so it
+    follows the picture instead of showing VIC FLI-bug corruption.
     """
     movie = Nuvie()
     n = 0
     for i, img in enumerate(images):
         if i >= MAX_FRAMES:
             break
-        nuf = NufliImage.from_image(img, third_colour=third_colour, dither=dither)
+        nuf = NufliImage.from_image(img, third_colour=third_colour, dither=dither,
+                                    flibug=flibug)
         movie.set_frame(i, build_slot(nuf))
         n = i + 1
     movie.set_playlist(_sequential_playlist(n))

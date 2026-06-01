@@ -121,6 +121,9 @@ class NufliImage:
         if len(body) < NUFLI_BODY_SIZE:
             body = bytes(body) + bytes(NUFLI_BODY_SIZE - len(body))
         self.body = bytes(body)
+        # set by from_image(flibug=True): the body carries a generated flibug plane,
+        # so the packer regenerates the per-frame displayer from its colour table.
+        self.flibug = False
 
     @classmethod
     def from_prg(cls, data: bytes) -> "NufliImage":
@@ -130,14 +133,22 @@ class NufliImage:
         return cls(data)
 
     @classmethod
-    def from_image(cls, img, third_colour: bool = True, dither: bool = False) -> "NufliImage":
+    def from_image(cls, img, third_colour: bool = True, dither: bool = False,
+                   flibug: bool = False) -> "NufliImage":
         """Encode a Pillow image into a NUFLI graphics image, mufflon-free.
 
         Produces the hi-res bitmap + per-8x2 FLI ink/paper, and (when
         ``third_colour`` is set) the six main hi-res sprites that add NUFLI's third
         colour. With ``dither`` the image is Floyd-Steinberg dithered to the C64
         palette first (mufflon's video look). Round-trips through
-        :meth:`decode_indices`. The left 24px flibug edge is not generated.
+        :meth:`decode_indices`.
+
+        With ``flibug`` the leftmost-24px sprite plane is generated (see
+        :mod:`nuvie._flibug`) so the left edge renders cleanly on the reference
+        player instead of showing the VIC FLI-bug corruption. It coexists with the
+        ``third_colour`` main-sprite underlay: both share the sprite-colour table,
+        and the flibug's per-line colour switches are woven into its free slots
+        (where a main sprite colour is unchanged), exactly as NUVIEmaker does.
         """
         global _SPRITE_MAP
         from ._hires import dither_to_palette, encode_hires
@@ -170,7 +181,13 @@ class NufliImage:
             for s in range(N_MAIN_SPRITES):
                 for lp in range(HEIGHT // 2):
                     body[_SPRITE_COLOUR_BASE[s] + lp] = sprite_cols[s][lp] & 0xF
-        return cls(bytes(body))
+        if flibug:
+            from ._flibug import encode_flibug
+
+            encode_flibug(img, body, has_main=third_colour)
+        obj = cls(bytes(body))
+        obj.flibug = flibug
+        return obj
 
     def to_prg(self) -> bytes:
         """Serialise as a NUFLI graphics ``.prg`` (2-byte ``$2000`` load address +

@@ -101,16 +101,16 @@ def build_reu(frame_slots: List[bytes], out_path: Optional[str] = None) -> Nuvie
 
 
 def encode_video(video: str, out_path: str, fps: float = 12.5, max_frames: int = MAX_FRAMES,
-                 third_colour: bool = True, dither: bool = False) -> int:
+                 third_colour: bool = True, dither: bool = True, flibug: bool = True) -> int:
     """Encode a video file into a full-colour, player-ready NUVIE ``.reu``.
 
-    Decodes the video to frames, NUFLI-encodes each (full per-8x2 colour + the
-    sprite-underlay third colour), packs them into REU slots with NUVIEmaker's
-    layout, and writes a sequential-playback ``.reu`` that runs on the reference
-    player. Returns the frame count.
+    Decodes the video to frames, NUFLI-encodes each (per-8x2 colour, plus the
+    generated left-24px flibug edge when ``flibug`` is set), packs them into REU
+    slots with NUVIEmaker's layout, and writes a sequential-playback ``.reu`` that
+    runs on the reference player. Returns the frame count.
     """
     from .pack import build_movie
 
     frames = list(_video_frames(video, fps, max_frames))
-    build_movie(frames, out_path, third_colour=third_colour, dither=dither)
+    build_movie(frames, out_path, third_colour=third_colour, dither=dither, flibug=flibug)
     return len(frames)

@@ -178,8 +178,36 @@ to the encoder's graphics over the fixed source template (`data/pack_source.bin`
 The result matches NUVIEmaker's *own* packed slot **99.9%** byte-for-byte and
 plays correctly on `nuvieplayer1.0.prg`, so `nuvie.encode` / `build_movie` emit
 full per-8×2-colour video. (The pack table and displayer stub are derived from
-Crest's NUVIEmaker and bundled, with attribution, purely for format interop. The
-left-edge ~24px flibug sprites are taken from the template rather than generated.)
+Crest's NUVIEmaker and bundled, with attribution, purely for format interop.)
+
+### The left-24px "flibug" edge (generated, `flibug=True`, default)
+
+NUFLI beats the VIC-II FLI bug (which prevents normal colour fetch in the
+screen's leftmost three character columns) with stacked sprites pinned at x=24,
+recoloured per line. `pynuvie` **generates** this plane mufflon-free
+(`nuvie._flibug` + `nuvie._displayer`), reverse-engineered by driving the real
+NUVIEmaker via [vice-driver](https://github.com/anarkiwi/vice-driver) and
+disassembling its generator. See `research/nuviemaker_flibug/`.
+
+How it works in this player (verified against the real tool):
+
+* NUVIEmaker builds a **per-frame displayer** (C64 `$1000-$1ee3`) as 100
+  per-line-pair blocks of unrolled FLI code, generated from the NUFLI body's
+  6-column sprite-colour table. Each table cell's high nibble selects a VIC
+  register (`0`→ main sprite `$d028+col`; `1`→ a sprite-position multiplex write;
+  `$5/$6/$7/$e`→ a flibug colour register), low nibble the colour. `nuvie._displayer.generate()`
+  reproduces this **byte-exact** (validated against two independent NUVIEmaker
+  outputs — see `tests/test_displayer.py`);
+* `nuvie._flibug.encode_flibug()` ports mufflon's flibug colour selection: per
+  line-pair it picks four sprite colours for the left 24px, assigns each pixel a
+  colour source (`combinations_flibug`), and emits the FLI ink/paper + left-edge
+  bitmap, the two sprite bitmaps, the initial colours, and per-line colour
+  switches woven into that table.
+
+Result: the left edge follows the picture (verified end-to-end on the reference
+player). The background reading for the technique:
+[NUFLIX write-up](https://cobbpg.github.io/articles/nuflix.html),
+[C64 OS FLI timing](https://c64os.com/post/flitiming2).
 
 ## Sources
 

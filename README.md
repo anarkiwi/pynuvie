@@ -102,6 +102,11 @@ x64sc -warp -reu -reusize 16384 -reuimage test-play.reu -reuimagerw \
 
 The player autostarts, reads the attached REU, and plays your video.
 
+> **Note:** the leftmost ~24px is NUFLI's "flibug" edge, an intricate FLI sprite
+> trick. `pynuvie` generates it mufflon-free (reverse-engineered from the real
+> NUVIEmaker) so it follows the picture. See
+> [`docs/FORMAT.md`](docs/FORMAT.md#the-left-24px-flibug-edge-generated-flibugtrue-default).
+
 ## License
 
 Apache-2.0. NUVIE, NUVIEmaker, NUFLI and the reference player are the work of

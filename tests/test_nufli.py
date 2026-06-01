@@ -76,8 +76,10 @@ def test_third_colour_adds_a_third_colour_per_block():
     pytest.importorskip("PIL")
     from PIL import Image
 
+    from nuvie.palette import C64_PALETTE
+
     img = Image.new("RGB", (320, 200))
-    cols = [(255, 0, 0), (0, 255, 0), (40, 40, 255)]
+    cols = [C64_PALETTE[2], C64_PALETTE[5], C64_PALETTE[3]]  # 3 distinct palette colours
     for x in range(320):
         for y in range(200):
             img.putpixel((x, y), cols[(x // 3) % 3])
