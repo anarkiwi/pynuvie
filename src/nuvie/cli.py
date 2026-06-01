@@ -71,6 +71,14 @@ def _cmd_encode(args) -> int:
     return 0
 
 
+def _cmd_testpattern(args) -> int:
+    from .testpattern import build
+
+    movie = build(args.out, n=args.frames, dither=args.dither)
+    print(f"wrote {movie.count_frames()}-frame test pattern to {args.out}")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="nuvie", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -101,6 +109,12 @@ def main(argv=None) -> int:
     pn.add_argument("--fps", type=float, default=12.5)
     pn.add_argument("--max-frames", type=int, default=768)
     pn.set_defaults(func=_cmd_encode)
+
+    pt = sub.add_parser("testpattern", help="generate an animated test-pattern .reu (no video needed)")
+    pt.add_argument("-o", "--out", required=True)
+    pt.add_argument("-n", "--frames", type=int, default=64)
+    pt.add_argument("--dither", action="store_true")
+    pt.set_defaults(func=_cmd_testpattern)
 
     args = p.parse_args(argv)
     return args.func(args)

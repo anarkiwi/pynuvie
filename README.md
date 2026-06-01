@@ -78,7 +78,29 @@ nuvie playlist movie.reu             # full decoded playlist
 nuvie extract movie.reu -o frames/   # dump each frame as a .slot
 nuvie build frames/*.slot -o out.reu # pack frame slots into a NUVIE
 nuvie encode clip.mp4 -o clip.reu    # video -> NUVIE (no mufflon)
+nuvie testpattern -o test.reu        # animated test pattern, no video needed
 ```
+
+## See it run
+
+No video file needed — generate an animated test pattern and play it on the C64:
+
+```sh
+nuvie testpattern -o test.reu -n 64
+```
+
+Then play `test.reu` in [VICE](https://vice-emu.sourceforge.io/)'s `x64sc` with
+Crest's `nuvieplayer1.0.prg` (from the
+[NUVIEmaker 0.1e release](https://csdb.dk/release/?id=100031)):
+
+```sh
+# VICE wipes the REU image on exit, so play a copy:
+cp test.reu test-play.reu
+x64sc -warp -reu -reusize 16384 -reuimage test-play.reu -reuimagerw \
+      -autostart nuvieplayer1.0.prg
+```
+
+The player autostarts, reads the attached REU, and plays your video.
 
 ## License
 

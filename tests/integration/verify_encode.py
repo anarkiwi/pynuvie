@@ -6,7 +6,6 @@ This is the inverse of verify_decode.py and closes the loop on the encoder +
 pack path. Requires Docker + the nuviemaker:local image (see README). Manual.
 """
 import os
-import subprocess
 import sys
 import tempfile
 
@@ -25,7 +24,7 @@ def main() -> int:
         build_movie([mm.make_frame(i) for i in FRAMES], reu)
         print(f"encoded {len(FRAMES)} frames -> {reu}")
         print("play it in the player to verify (see tests/integration/README.md):")
-        print(f"  it should show the per-frame barcode, fiducials and the 16-colour swatch")
+        print("  it should show the per-frame barcode, fiducials and the 16-colour swatch")
     return 0
 
 
