@@ -70,6 +70,22 @@ and packed into the REU exactly as Crest's `NUVIEmaker` would — `pynuvie`'s
 pure-Python pack reproduces NUVIEmaker's own packed slot to 99.9% and the output
 plays on the reference player. See `docs/FORMAT.md`.
 
+### Byte-identical to mufflon
+
+The full-colour encoder is a faithful port of Crest's `mufflon` colour optimiser
+(`nuvie._mufflon`). For any input whose pixels are exact C64 **Pepto** colours,
+`pynuvie` produces a NUFLI graphic **byte-for-byte identical** to
+`mufflon --otype nufli` — the hi-res bitmap, the per-8×2 FLI screen RAM, the six
+main sprite bitmaps and the sprite colour table all match exactly (see
+`tests/test_mufflon_parity.py`, which checks against a committed mufflon
+reference). For arbitrary RGB the only differences come from mufflon being built
+with `-ffast-math`, whose 1-ULP rounding flips the occasional colour tie; those
+are a property of mufflon's compiler flags, not of the algorithm (a strict-IEEE
+mufflon build agrees far more closely). mufflon's `--flibug` left-edge plane is
+*not* byte-reproducible because mufflon generates it non-deterministically (its
+output differs run-to-run); `pynuvie` generates that edge separately and
+deterministically (see below).
+
 ## CLI
 
 ```sh
