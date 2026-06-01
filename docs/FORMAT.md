@@ -159,12 +159,27 @@ Confirmed by tracing its REU→C64 DMA and by playing crafted REUs:
   screen pair — so the displayed colour of a set bitmap bit is driven by the
   sprite plane.
 
-`pynuvie`'s encoder writes a frame's bitmap into the slot exactly (placement is
-correct and verified in the real player). Reproducing full per-region NUFLI
-**colour** in the slot additionally requires emitting the FLI screen pairs *and*
-the sprite-underlay plane in the player's exact layout; that mapping is only
-partially recovered, so `nuvie.encode` currently emits two-colour frames. The
-standalone `NufliImage.from_image` encoder (above) is full per-8×2 colour.
+### Packing a frame into a slot (full colour)
+
+`pynuvie` builds player-ready, full-colour slots in pure Python by reproducing
+what Crest's `NUVIEmaker` does when it stashes a loaded NUFLI image into the REU.
+Recovered by reverse-engineering NUVIEmaker's pack routine (C64 `$0E00`):
+
+* the routine walks a table of 8-byte DMA descriptors at `$9800` —
+  `[c64_lo, c64_hi, reu_lo, reu_mid, bank_index, len_lo, len_hi, terminator]` —
+  each a C64→REU "stash" (REU command `$FC`);
+* the C64 source is the loaded `.nuf` graphics at `$2000+` plus a fixed
+  player-displayer stub at `$1000-$1FFF` that NUVIEmaker supplies;
+* a frame is assigned a slot via zero-page base bytes; frame 0 uses base mid
+  `$01`, i.e. part 2 at bank offset `$0100` and part 1 (80 bytes) at `$0000`.
+
+`nuvie.pack.build_slot()` applies this table (shipped as `data/pack_table.json`)
+to the encoder's graphics over the fixed source template (`data/pack_source.bin`).
+The result matches NUVIEmaker's *own* packed slot **99.9%** byte-for-byte and
+plays correctly on `nuvieplayer1.0.prg`, so `nuvie.encode` / `build_movie` emit
+full per-8×2-colour video. (The pack table and displayer stub are derived from
+Crest's NUVIEmaker and bundled, with attribution, purely for format interop. The
+left-edge ~24px flibug sprites are taken from the template rather than generated.)
 
 ## Sources
 

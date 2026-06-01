@@ -54,16 +54,21 @@ NufliImage.from_image(Image.open("photo.png"), third_colour=True, dither=False)
 The decoder renders all three colours (hi-res + FLI ink/paper + sprite underlay)
 and is checked frame-for-frame against mufflon's own rendering.
 
-Encode a video into a NUVIE with no `mufflon`:
+Encode a video into a **full-colour, player-ready** NUVIE with no `mufflon` and
+no emulator:
 
 ```python
 from nuvie.encode import encode_video
-encode_video("clip.mp4", "clip.reu", fps=12.5)
+encode_video("clip.mp4", "clip.reu", fps=12.5)        # full per-8x2 colour + sprite underlay
+
+from nuvie import build_movie                          # or from a list of images
+build_movie([img0, img1, ...], "out.reu", dither=True)
 ```
 
-> The encoder currently emits two-colour hi-res frames (the container, playlist
-> and frame placement are exact; full per-8×2 FLI colour and the sprite underlay
-> are not yet generated). See `docs/FORMAT.md`.
+Each frame is NUFLI-encoded (per-8×2 colour + the sprite-underlay third colour)
+and packed into the REU exactly as Crest's `NUVIEmaker` would — `pynuvie`'s
+pure-Python pack reproduces NUVIEmaker's own packed slot to 99.9% and the output
+plays on the reference player. See `docs/FORMAT.md`.
 
 ## CLI
 

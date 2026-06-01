@@ -7,6 +7,7 @@ streamed into the C64 by the reference player.
 """
 
 from .nufli import NufliImage
+from .pack import build_movie, build_slot
 from .palette import C64_PALETTE
 from .playlist import Playlist, Token, TokenKind
 from .reu import Control, Nuvie
@@ -26,5 +27,7 @@ __all__ = [
     "Token",
     "TokenKind",
     "C64_PALETTE",
+    "build_movie",
+    "build_slot",
     "__version__",
 ]

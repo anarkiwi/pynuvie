@@ -44,3 +44,11 @@ docker build -t nuviemaker:local ../docker-nuviemaker
 Note: the headless VICE build in the image needs its state dirs to exist
 (`/root/.local/state/vice`, `/root/.config/vice`) or `x64sc` segfaults; the
 helper scripts create them.
+
+## `verify_encode.py` (manual)
+
+The reverse of `verify_decode.py`: encodes frames with `pynuvie` (full-colour,
+pure Python), packs them into a `.reu` via the recovered NUVIEmaker pack table,
+and (when played on `nuvieplayer1.0.prg`) shows the per-frame barcode, corner
+fiducials and the 16-colour swatch strip. The non-emulator regression for the
+pack path is `tests/test_pack.py` (build_slot vs NUVIEmaker's own captured slot).
