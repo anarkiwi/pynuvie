@@ -130,13 +130,20 @@ class NufliImage:
         return cls(data)
 
     @classmethod
-    def from_image(cls, img) -> "NufliImage":
-        """Encode a Pillow image into a NUFLI graphics image (hi-res, per-8x2
-        two colours -- no sprite-underlay third colour). Round-trips exactly with
-        :meth:`decode_indices`. This is the pure-Python, mufflon-free NUFLI encoder.
-        """
-        from ._hires import encode_hires
+    def from_image(cls, img, third_colour: bool = True, dither: bool = False) -> "NufliImage":
+        """Encode a Pillow image into a NUFLI graphics image, mufflon-free.
 
+        Produces the hi-res bitmap + per-8x2 FLI ink/paper, and (when
+        ``third_colour`` is set) the six main hi-res sprites that add NUFLI's third
+        colour. With ``dither`` the image is Floyd-Steinberg dithered to the C64
+        palette first (mufflon's video look). Round-trips through
+        :meth:`decode_indices`. The left 24px flibug edge is not generated.
+        """
+        global _SPRITE_MAP
+        from ._hires import dither_to_palette, encode_hires
+
+        if dither:
+            img = dither_to_palette(img)
         bitmap, screen = encode_hires(img)
         o1, l1 = _BITMAP_HI
         o2, l2 = _BITMAP_LO
@@ -147,6 +154,22 @@ class NufliImage:
             for cx in range(40):
                 ink, paper = screen[by][cx]
                 body[NUIFLI_SCRAM[by] + cx] = ((ink & 0xF) << 4) | (paper & 0xF)
+        if third_colour:
+            from ._sprites import encode_sprites
+
+            px = img.convert("RGB").resize((WIDTH, HEIGHT)).load()
+
+            def bit(x, y):
+                return _bitmap_bit(bitmap, x, y)
+
+            sprite_bytes, sprite_cols = encode_sprites(px, bit, screen)
+            if _SPRITE_MAP is None:
+                _SPRITE_MAP = _sprite_addr_map()
+            for (y, col), val in sprite_bytes.items():
+                body[_SPRITE_MAP[(y, col)]] = val
+            for s in range(N_MAIN_SPRITES):
+                for lp in range(HEIGHT // 2):
+                    body[_SPRITE_COLOUR_BASE[s] + lp] = sprite_cols[s][lp] & 0xF
         return cls(bytes(body))
 
     def to_prg(self) -> bytes:

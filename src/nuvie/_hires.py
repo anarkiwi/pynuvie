@@ -58,13 +58,32 @@ def _best_pair(pixels: List[Tuple[int, int, int]]) -> Tuple[int, int]:
     return best
 
 
-def encode_hires(rgb) -> Tuple[bytearray, List[List[Tuple[int, int]]]]:
+def dither_to_palette(rgb):
+    """Floyd-Steinberg-dither an image to the 16-colour C64 palette and return it
+    as an RGB image. Used to give NUFLI video the interlacing look mufflon's
+    ``--dither`` produces (it trades static fidelity for smoother motion)."""
+    from PIL import Image
+
+    flat = []
+    for r, g, b in C64_PALETTE:
+        flat += [r, g, b]
+    flat += [0, 0, 0] * (256 - len(C64_PALETTE))
+    pal = Image.new("P", (1, 1))
+    pal.putpalette(flat)
+    q = rgb.convert("RGB").resize((WIDTH, HEIGHT)).quantize(
+        palette=pal, dither=Image.Dither.FLOYDSTEINBERG
+    )
+    return q.convert("RGB")
+
+
+def encode_hires(rgb, dither: bool = False) -> Tuple[bytearray, List[List[Tuple[int, int]]]]:
     """Encode a Pillow RGB image (resized to 320x200) into (bitmap, screen grid).
 
     ``screen[by][cx]`` is the ``(ink, paper)`` pair for the 8x2 block at column
-    ``cx`` and block-row ``by``.
+    ``cx`` and block-row ``by``. With ``dither`` the image is Floyd-Steinberg
+    dithered to the C64 palette first.
     """
-    img = rgb.convert("RGB").resize((WIDTH, HEIGHT))
+    img = dither_to_palette(rgb) if dither else rgb.convert("RGB").resize((WIDTH, HEIGHT))
     px = img.load()
     bitmap = bytearray(8000)
     screen: List[List[Tuple[int, int]]] = [[(0, 0)] * COLS for _ in range(BLOCK_ROWS)]

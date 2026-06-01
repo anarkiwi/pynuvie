@@ -46,8 +46,13 @@ from nuvie.nufli import NufliImage
 NufliImage.from_prg(open("000.nuf", "rb").read()).to_image().save("000.png")
 
 from PIL import Image
-NufliImage.from_image(Image.open("photo.png"))   # -> full-colour NUFLI graphics
+# full-colour NUFLI: per-8x2 hi-res + the sprite-underlay third colour;
+# optional Floyd-Steinberg dithering for the mufflon "video" look.
+NufliImage.from_image(Image.open("photo.png"), third_colour=True, dither=False)
 ```
+
+The decoder renders all three colours (hi-res + FLI ink/paper + sprite underlay)
+and is checked frame-for-frame against mufflon's own rendering.
 
 Encode a video into a NUVIE with no `mufflon`:
 

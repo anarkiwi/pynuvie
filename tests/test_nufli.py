@@ -58,17 +58,37 @@ def test_from_image_roundtrip_and_constraints():
     d = ImageDraw.Draw(img)
     d.rectangle([20, 20, 150, 100], fill=(255, 0, 0))
     d.ellipse([170, 30, 300, 160], fill=(0, 200, 80))
-    nuf = NufliImage.from_image(img)
-    dec = nuf.decode_indices()
+    nuf = NufliImage.from_image(img, third_colour=False)
+    dec = nuf.decode_indices(sprites=False)
     # encoding the decoded image must reproduce the same bytes (stable codec)
-    assert NufliImage.from_image(nuf.to_image()).body == nuf.body
-    # every 8x2 block uses at most two colours (the FLI constraint)
+    assert NufliImage.from_image(nuf.to_image(), third_colour=False).body == nuf.body
+    # every 8x2 block uses at most two colours (the two-colour FLI constraint)
     for by in range(100):
         for cx in range(40):
             cols = {dec[by * 2 + dy][cx * 8 + dx] for dy in range(2) for dx in range(8)}
             assert len(cols) <= 2
     # a colourful image must use more than two colours overall
     assert len({v for row in dec for v in row}) > 2
+
+
+def test_third_colour_adds_a_third_colour_per_block():
+    pytest = __import__("pytest")
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    img = Image.new("RGB", (320, 200))
+    cols = [(255, 0, 0), (0, 255, 0), (40, 40, 255)]
+    for x in range(320):
+        for y in range(200):
+            img.putpixel((x, y), cols[(x // 3) % 3])
+    dec = NufliImage.from_image(img, third_colour=True).decode_indices()
+    three = sum(
+        1
+        for by in range(100)
+        for cx in range(40)
+        if len({dec[by * 2 + dy][cx * 8 + dx] for dy in range(2) for dx in range(8)}) == 3
+    )
+    assert three > 100  # the sprite underlay yields genuine three-colour blocks
 
 
 def test_to_prg_has_load_address():
@@ -107,3 +127,19 @@ def test_sprite_underlay_matches_mufflon():
     # the third colour must bring us much closer to mufflon, near the noise floor
     assert with_sprites < without
     assert with_sprites < 3000
+
+
+def test_dither_produces_valid_decodable_image():
+    pytest = __import__("pytest")
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    img = Image.new("RGB", (320, 200))
+    for x in range(320):
+        for y in range(200):
+            img.putpixel((x, y), ((x * 255) // 320, (y * 255) // 200, 128))
+    nuf = NufliImage.from_image(img, dither=True)
+    dec = nuf.decode_indices()
+    assert len(dec) == 200 and all(len(r) == 320 for r in dec)
+    # dithering should spread the gradient across several palette colours
+    assert len({v for row in dec for v in row}) >= 6
