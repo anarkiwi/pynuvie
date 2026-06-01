@@ -57,6 +57,53 @@ NUIFLI_SCRAM: List[int] = [
 ]
 
 
+# --- sprite underlay (the NUFLI third colour) ---
+# FLI bug width: the left 24px are covered by the "flibug" sprites; the six main
+# double-width hi-res sprites tile x in [24, 312), 48px each, and provide a third
+# colour: where the bitmap bit is 0 and the sprite bit is 1, the sprite's colour
+# shows instead of paper.
+FLIBUG_WIDTH = 0x18  # 24
+MAIN_SPRITE_X0 = FLIBUG_WIDTH
+MAIN_SPRITE_W = 48  # double-width hi-res sprite
+N_MAIN_SPRITES = 6
+
+# Per-line-pair colour table base for each main sprite (mufflon render()).
+_SPRITE_COLOUR_BASE = [0x0400, 0x0480, 0x0800, 0x0880, 0x0C00, 0x0C80]
+
+# Sprite-bitmap row addresses (mufflon.h `nuifli_spram`), index = y // 2.
+NUIFLI_SPRAM: List[int] = (
+    [0x3E80, 0x3A80, 0x3680, 0x3280, 0x2E80, 0x2A80, 0x2680, 0x2280] * 8
+    + [0x0100, 0x0500, 0x0900, 0x0D00] * 5
+    + [0x0500, 0x0900, 0x0D00, 0x0100] * 4
+)
+
+
+def _sprite_addr_map() -> dict:
+    """Map (y, col) -> body offset of the sprite-bitmap byte, replicating
+    mufflon's render() addressing (col 0..17 == 6 sprites x 3 bytes)."""
+    out = {}
+    row = 5
+    ncols = (WIDTH - 8 - FLIBUG_WIDTH) // 8 // 2  # 18
+    for y in range(HEIGHT):
+        for col in range(ncols):
+            srow = (row + (col % 3)) & 0x3F
+            if col >= 15 and y < 128:
+                addr = 0x5400 + ((((y // 2) & 7) ^ 7) * 0x40) + srow
+            else:
+                addr = NUIFLI_SPRAM[y // 2] + srow + (col // 3) * 0x40
+            out[(y, col)] = addr
+        if (y & 1) == 0:
+            row += 3
+        if row > 0x3F:
+            row &= 0x3F
+        elif row == 0x3F:
+            row = 0
+    return out
+
+
+_SPRITE_MAP = None
+
+
 def _bitmap_bit(bitmap: bytes, x: int, y: int) -> int:
     """Standard C64 hi-res bitmap pixel: 1 == ink, 0 == paper."""
     cell = (y >> 3) * 320 + (x >> 3) * 8 + (y & 7)
@@ -118,14 +165,20 @@ class NufliImage:
         ``line_pair`` 0..99 (i.e. screen row ``y // 2``)."""
         return self.body[NUIFLI_SCRAM[line_pair] + col]
 
-    def decode_indices(self) -> List[List[int]]:
+    def decode_indices(self, sprites: bool = True) -> List[List[int]]:
         """Decode to a ``HEIGHT`` x ``WIDTH`` grid of C64 palette indices.
 
-        Uses the hi-res bitmap plus the per-8x2 FLI screen-RAM ink/paper colours.
-        This is exact for hi-res content; sprite-underlay colours (an extra colour
-        and odd-line recolouring near the left edge) are not yet applied.
+        Combines the hi-res bitmap, the per-8x2 FLI screen-RAM ink/paper, and (when
+        ``sprites`` is set) the six main hi-res sprites that provide NUFLI's third
+        colour across ``x`` in [24, 312). Validated against mufflon's own rendering
+        to the dithering-noise floor over that region. The left 24px "flibug" edge
+        (a multicolour + hi-res sprite pair with per-line colour switching) is not
+        decoded, so those columns fall back to the raw bitmap colours.
         """
+        global _SPRITE_MAP
         bitmap = self.bitmap()
+        if sprites and _SPRITE_MAP is None:
+            _SPRITE_MAP = _sprite_addr_map()
         out: List[List[int]] = []
         for y in range(HEIGHT):
             lp = y >> 1
@@ -137,8 +190,24 @@ class NufliImage:
                 for px in range(8):
                     x = base + px
                     row[x] = ink if _bitmap_bit(bitmap, x, y) else paper
+            if sprites:
+                self._apply_sprites(row, y, bitmap)
             out.append(row)
         return out
+
+    def _apply_sprites(self, row: List[int], y: int, bitmap: bytes) -> None:
+        """Overlay the six main hi-res sprites (third colour) onto a decoded row."""
+        lp = y >> 1
+        end = MAIN_SPRITE_X0 + N_MAIN_SPRITES * MAIN_SPRITE_W
+        for x in range(MAIN_SPRITE_X0, min(end, WIDTH)):
+            if _bitmap_bit(bitmap, x, y):
+                continue  # foreground hi-res pixel wins over the sprite plane
+            rel = x - MAIN_SPRITE_X0
+            sprite = rel // MAIN_SPRITE_W
+            within = (rel % MAIN_SPRITE_W) // 2  # 0..23, double-width
+            byte = self.body[_SPRITE_MAP[(y, sprite * 3 + within // 8)]]
+            if (byte >> (7 - (within & 7))) & 1:
+                row[x] = self.body[_SPRITE_COLOUR_BASE[sprite] + lp] & 0xF
 
     def to_image(self, palette: Optional[List] = None):
         """Render to a Pillow ``Image`` (requires the optional ``Pillow`` dep)."""
@@ -149,5 +218,17 @@ class NufliImage:
         px = img.load()
         for y, row in enumerate(self.decode_indices()):
             for x, idx in enumerate(row):
+                px[x, y] = pal[idx]
+        return img
+
+    def to_image_nosprites(self, palette: Optional[List] = None):
+        """Render without the sprite underlay (hi-res + FLI screen only)."""
+        from PIL import Image
+
+        pal = palette or C64_PALETTE
+        img = Image.new("RGB", (WIDTH, HEIGHT))
+        px = img.load()
+        for y, r in enumerate(self.decode_indices(sprites=False)):
+            for x, idx in enumerate(r):
                 px[x, y] = pal[idx]
         return img

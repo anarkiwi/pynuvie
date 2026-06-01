@@ -76,3 +76,34 @@ def test_to_prg_has_load_address():
     prg = nuf.to_prg()
     assert prg[:2] == b"\x00\x20"
     assert len(prg) == NUFLI_BODY_SIZE + 2
+
+
+def _mse(a, b, x_range):
+    pa, pb = a.load(), b.load()
+    s = n = 0
+    for y in range(200):
+        for x in x_range:
+            for k in range(3):
+                s += (pa[x, y][k] - pb[x, y][k]) ** 2
+            n += 1
+    return s // n
+
+
+def test_sprite_underlay_matches_mufflon():
+    """Decode a real mufflon .nuf and check the sprite-underlay third colour
+    matches mufflon's own rendering across the main image area."""
+    import os
+
+    pytest = __import__("pytest")
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    here = os.path.join(os.path.dirname(__file__), "fixtures")
+    nuf = NufliImage.from_prg(open(os.path.join(here, "nufli_sample.nuf"), "rb").read())
+    ref = Image.open(os.path.join(here, "nufli_sample_result.png")).convert("RGB")
+    main = range(24, 312)
+    with_sprites = _mse(nuf.to_image(), ref, main)
+    without = _mse(NufliImage(nuf.body).to_image_nosprites(), ref, main)
+    # the third colour must bring us much closer to mufflon, near the noise floor
+    assert with_sprites < without
+    assert with_sprites < 3000

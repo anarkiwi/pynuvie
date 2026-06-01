@@ -136,8 +136,14 @@ frame's C64 memory image from its slot for analysis.
 
 For the **standalone** NUFLI `.prg` ("`.nuf`") format produced by `mufflon`
 (load address `$2000`, 0x5A00 bytes), `pynuvie`'s `nuvie.nufli` decodes the
-hi-res bitmap + FLI screen RAM to a 320×200 grid of palette indices; the byte
-offsets there come directly from the `mufflon` source. `NufliImage.from_image`
+hi-res bitmap + FLI screen RAM **plus the six main hi-res sprites that provide
+NUFLI's third colour** (where the bitmap bit is 0 and a sprite bit is 1, the
+sprite's per-line-pair colour shows instead of paper) — validated against
+mufflon's own rendering to the dithering-noise floor across `x` in [24, 312).
+The left 24px "flibug" edge (a multicolour + hi-res sprite pair with per-line
+colour switching applied by the displayer) is not decoded and falls back to the
+raw bitmap colours. All byte offsets come from the `mufflon` source.
+`NufliImage.from_image`
 **encodes** an image back into that layout (per-8×2 two-colour FLI, all 16
 colours across the frame) — a pure-Python, mufflon-free NUFLI encoder, verified
 to round-trip exactly through the decoder.
