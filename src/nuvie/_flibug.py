@@ -20,12 +20,13 @@ mufflon; the displayer side is validated byte-exact in
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Optional
 
 from .palette import C64_PALETTE
 from .nufli import NUIFLI_SCRAM
 
 WIDTH, HEIGHT, FLI = 320, 200, 0x18
+SPLITSTART, SPLITEND = 0x3E, 0x52  # split-region line-pairs (mufflon)
 INK, PAPER = 0, 1
 FLISPRITE, M1, M2, M3 = 6, 7, 8, 9
 _CH = (FLISPRITE, M1, M2, M3)
@@ -162,90 +163,118 @@ def encode_flibug(img, body: bytearray, has_main: bool = False, sprite_tab=None)
         tab = [[int(sprite_tab[lp][b]) for b in range(6)] for lp in range(101)]
     else:  # no 3rd-colour underlay: every slot is unused (0xFF) -> all free
         tab = [[0xFF] * 6 for _ in range(101)]
-    free_slots = []
-    for lp in range(100):
-        n = 0
-        for b in range(1, 6):  # column 0 reserved (mufflon free_switches_flibug)
-            if lp == 0 or tab[lp][b] == tab[lp - 1][b] or tab[lp][b] == 0xFF:
-                n += 1
-        free_slots.append(n)
+    # fsw[lp][col] = 1 if that colour-table column is a free switch slot at lp (the
+    # underlay colour is unchanged from lp-1 or unused); free_flibug excludes col 0
+    # (reserved), matching mufflon free_switches / free_switches_flibug.
+    fsw = [[1 if (lp == 0 or tab[lp][b] == tab[lp - 1][b] or tab[lp][b] == 0xFF) else 0
+            for b in range(6)] for lp in range(100)]
+    free_flibug = [sum(fsw[lp][1:6]) for lp in range(100)]
 
-    # per-line present colours (mufflon flibug_col_is_used): the brute-force only
-    # ever considers colours that actually appear in that line-pair's left 24px,
-    # plus "unused" (-1). Restricting to present colours is what stops the search
-    # spending a sprite colour on an absent saturated value (which renders as a
-    # full-width streak) and is exactly mufflon's candidate set.
+    # per-line present colours (mufflon flibug_col_is_used): only colours that
+    # actually appear in that line-pair's left 24px are candidates (+ unused). This
+    # is mufflon's candidate set and stops the search spending a sprite colour on an
+    # absent value (which would render as a full-width streak).
     present = []
     for lp in range(100):
         s = set()
         for yy in (lp * 2, lp * 2 + 1):
             for b in range(3):
                 s |= used[yy][b]
-        present.append(sorted(s) + [-1])
+        present.append(sorted(s))
 
-    # --- per-line flibug colour search, ported from mufflon find_best_colors_flibug ---
-    # mufflon brute-forces the 4 flibug sprite colours (hires + 3 multicolour) per
-    # line over the present colours, scoring with find_best_colors_line over
-    # combinations_flibug, and carries colours forward (continuity) -- changing at
-    # most as many as there are free switch slots that line, preferring not to spend
-    # a colour on $0f (which AFLI shows for free).
-    def pick_colours(lp, prev, navail):
+    # --- mufflon find_best_colors_flibug, ported (switch-budget continuity) ---
+    # Per line-pair, decide which of the 4 sprite colours may CHANGE: a colour can
+    # only change where a sprite-colour-table switch is free, found by scanning back
+    # to the earliest free slot (find_last_available_switch), and only while keeping
+    # 8 switches in reserve for the screen-split pointers (free_switches_max). The
+    # changeable colours are searched over the present colours; the rest are pinned
+    # to the colour carried from the previous line, then a colour change is
+    # propagated forward (so colours stay stable across a region instead of
+    # streaking). flibug_optimize then drops any change that doesn't actually help.
+    fb_col = [[-1] * 100 for _ in range(4)]  # [channel][line-pair], carried forward
+    free_max = sum(sum(fsw[lp]) for lp in range(SPLITSTART, min(SPLITEND + 1, 100)))
+
+    def last_available_switch(lp, ch, free_temp):
+        """mufflon find_last_available_switch: earliest line-pair <= lp with a free
+        slot, before this channel's colour was last set. Returns (ok, line-pair)."""
+        newy, yp = lp + 1, lp
+        while yp >= 0:
+            if yp != lp and fb_col[ch][yp] >= 0:
+                break
+            if free_temp[yp] > 0:
+                newy = yp
+            yp -= 1
+        return (newy <= lp), newy
+
+    def line_delta(lp, cols4):
+        return line_cost(lp, cols4)[0]
+
+    for lp in range(100):
         y = lp * 2
-        cands = present[lp]
-        seed = [c if c in cands else cands[0] for c in prev]
-        if all(c < 0 for c in prev):  # first line: seed from the most-used colours
-            cnt = {}
-            for x in range(FLI):
-                for yy in (y, y + 1):
-                    cnt[int(nearest[yy, x])] = cnt.get(int(nearest[yy, x]), 0) + 1
-            top = [c for c, _ in sorted(cnt.items(), key=lambda kv: -kv[1])]
-            seed = (top + [top[0] if top else 0] * 4)[:4]
-        best = list(seed)
-        best_cost = line_cost(lp, best)[0]
+        free_temp = list(free_flibug)
+        test_col = [0, 0, 0, 0]
+        free_ypos = [lp + 1] * 4
+        cand = [None] * 4   # per-channel candidate colours (search set or single preset)
+        free_cols = 0
+        for i in range(4):
+            ok, ny = last_available_switch(lp, i, free_temp)
+            free_ypos[i] = ny
+            if ok and free_max - free_cols > 8:   # keep 8 switches for the split pointers
+                test_col[i] = 1
+                free_temp[ny] -= 1
+                free_cols += 1
+            preset = -1 if lp == 0 else fb_col[i][lp]
+            if test_col[i]:                       # changeable -> search present colours
+                pool = [c for c in present[lp] if (y & 7) == 0 or c != 0x0F]
+                cand[i] = (pool or [preset if preset >= 0 else 0]) + [-1]
+            else:                                 # pinned to the carried colour
+                cand[i] = [-1] if ((y & 7) >= 2 and preset == 0x0F) else [preset]
+        # coordinate-descent search over the changeable channels (pinned ones fixed),
+        # seeded from the carried colours; prefer not to spend a colour on $0f.
         afli = (y & 7) < 2
+        best = [(-1 if lp == 0 else fb_col[i][lp]) for i in range(4)]
+        for i in range(4):
+            if best[i] not in cand[i]:
+                best[i] = cand[i][0]
+        best_cost = line_delta(lp, best)
         for _ in range(3):
             improved = False
             for i in range(4):
-                cur_c, cur_cost = best[i], best_cost
-                for cand in cands:
-                    if cand == best[i]:
+                if len(cand[i]) <= 1:
+                    continue
+                cc, ccost = best[i], best_cost
+                for c in cand[i]:
+                    if c == best[i]:
                         continue
-                    trial = list(best)
-                    trial[i] = cand
-                    c = line_cost(lp, trial)[0]
-                    if c < cur_cost or (
-                        c == cur_cost and not afli and cur_c == 0x0F and 0 <= cand != 0x0F
-                    ):
-                        cur_cost, cur_c = c, cand
-                if cur_c != best[i]:
-                    best[i], best_cost = cur_c, cur_cost
-                    improved = True
+                    t = list(best)
+                    t[i] = c
+                    d = line_delta(lp, t)
+                    if d < ccost or (d == ccost and not afli and cc == 0x0F and 0 <= c != 0x0F):
+                        ccost, cc = d, c
+                if cc != best[i]:
+                    best[i], best_cost, improved = cc, ccost, True
             if not improved:
                 break
-        # continuity / switch budget: keep at most navail changes vs prev so every
-        # colour change has a free table slot (drop the least valuable changes).
-        if navail < 4 and any(c >= 0 for c in prev):
-            base = line_cost(lp, best)[0]
-
-            def revert_delta(i):
+        # flibug_optimize: drop a change (revert to carried colour) if it doesn't help
+        for i in range(4):
+            if test_col[i]:
+                carried = -1 if lp == 0 else fb_col[i][lp]
                 t = list(best)
-                t[i] = prev[i]
-                return line_cost(lp, t)[0] - base
+                t[i] = carried
+                if line_delta(lp, t) <= best_cost:
+                    best[i] = carried
+                    test_col[i] = 0
+        # propagate each colour forward from its switch line-pair (continuity)
+        for i in range(4):
+            carried = -1 if lp == 0 else fb_col[i][lp]
+            if best[i] != carried:
+                for j in range(free_ypos[i], 100):
+                    fb_col[i][j] = best[i]
+            else:
+                fb_col[i][lp] = carried
 
-            changed = [i for i in range(4) if best[i] != prev[i]]
-            if len(changed) > navail:
-                for i in sorted(changed, key=revert_delta)[: len(changed) - navail]:
-                    best[i] = prev[i]
-        return best
-
-    fb: List[List[int]] = []
-    inkpap = []
-    prev = [-1, -1, -1, -1]
-    for lp in range(100):
-        c = pick_colours(lp, prev, free_slots[lp])
-        fb.append(c)
-        inkpap.append(line_cost(lp, c)[1])
-        prev = c
+    fb = [[fb_col[i][lp] for i in range(4)] for lp in range(100)]
+    inkpap = [line_cost(lp, fb[lp])[1] for lp in range(100)]
 
     # render: per-pixel channel choice -> bitmaps + ink/paper
     for lp in range(100):
