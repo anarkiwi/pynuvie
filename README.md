@@ -18,7 +18,7 @@ output (see `tests/integration`).
 
 ```sh
 pip install pynuvie          # core library + CLI
-pip install pynuvie[image]   # also decode/encode images (needs Pillow)
+pip install pynuvie[image]   # also decode/encode images (needs Pillow + numpy)
 ```
 
 ## Library
