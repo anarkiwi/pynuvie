@@ -7,7 +7,7 @@ name = "pynuvie"
 dynamic = ["version"]
 description = "Read, write and document Commodore 64 NUVIE REU video files."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Josh Bailey", email = "josh@overlyspecific.com" }]

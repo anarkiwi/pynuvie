@@ -40,14 +40,12 @@ SOURCE_BASE = 0x1000  # pack_source.bin represents C64 $1000..$7A00
 
 
 def _data_path(name: str):
-    try:
-        from importlib.resources import files
+    """Path to a bundled data file. Uses the module's own directory so it works on
+    every Python version and whether installed or run in-tree (the data dir has no
+    ``__init__``, which trips ``importlib.resources.files`` on 3.9)."""
+    from pathlib import Path
 
-        return files("nuvie.data") / name
-    except Exception:  # pragma: no cover
-        import os
-
-        return os.path.join(os.path.dirname(__file__), "data", name)
+    return Path(__file__).resolve().parent / "data" / name
 
 
 @lru_cache(maxsize=1)
