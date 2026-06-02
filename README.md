@@ -17,7 +17,7 @@ as the C64 would show it — full colour and greyscale, 16 colours, 320×200:
 
 | colour | greyscale |
 | --- | --- |
-| ![colour](docs/showcase_colour.gif) | ![greyscale](docs/showcase_grey.gif) |
+| ![colour](https://raw.githubusercontent.com/anarkiwi/pynuvie/main/docs/showcase_colour.gif) | ![greyscale](https://raw.githubusercontent.com/anarkiwi/pynuvie/main/docs/showcase_grey.gif) |
 
 ## Install
 
