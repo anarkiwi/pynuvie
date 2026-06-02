@@ -51,13 +51,16 @@ def _sprite_of_col(c):
     return (c - 3) // 6 if 3 <= c <= 38 else -1
 
 
-def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0) -> bytearray:
+def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
+                 texture: float = 0.7) -> bytearray:
     """FLI-aware encode of ``rgb`` (200,320,3) to a NUFLI body. Fills the main
     image (char cols 3..39); cols 0..2 are left for the flibug edge.
 
-    ``cohere`` is the vertical-coherence penalty (cost units) for changing a
-    cell's ink/paper or a region's sprite colour from the line-pair above; higher
-    keeps colours more stable across a region (less streaking) at some accuracy."""
+    ``cohere`` is the vertical-coherence penalty for changing a cell's ink/paper or
+    a region's sprite colour from the line-pair above (higher = less streaking).
+    ``texture`` (0..1) blends the cell colour choice between nearest-endpoint error
+    (0 = flat, lowest MSE) and dithered/segment error (1 = bracketing colours the
+    dither blends, mufflon-like high-frequency texture)."""
     COHERE = cohere
     pal = _yuv(np.array(C64_PALETTE, dtype=np.float64))     # (16,3)
     img = _yuv(rgb.astype(np.float64))                      # (200,320,3)
@@ -66,12 +69,43 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0) -> byte
         d = (v[..., None, :] - pal[None, ...]) * _WT
         return (d * d).sum(-1)
 
-    # precompute per-cell pixel distances to the 16 colours: cd[lp][c] = (16px,16col)
-    cd = [[None] * 40 for _ in range(100)]
+    # Pre-compute, per 8x2 cell, the weighted pixels and their distance to each
+    # colour. The structure is chosen by *dithered* error (distance to the SEGMENT
+    # between ink and paper, not the nearer endpoint), so bracketing colours the
+    # FS dither can blend into the true shade win -- that's what gives texture
+    # instead of collapsing sub-palette gradients to a flat colour.
+    pw = pal * _WT                                   # weighted palette (16,3)
+    pwpw = pw @ pw.T                                 # (16,16) dot products
+    ab2 = (pwpw.diagonal()[:, None] + pwpw.diagonal()[None, :] - 2 * pwpw)  # |pw_j-pw_i|^2
+    ab2 = np.where(ab2 > 1e-9, ab2, 1.0)             # (16i,16j)
+    diag = pwpw.diagonal()
+    cd = [[None] * 40 for _ in range(100)]           # cd[lp][c] = (16px,16col)
+    cppw = [[None] * 40 for _ in range(100)]         # P . pw  (16px,16col)
     for lp in range(100):
         for c in range(40):
             px = img[lp * 2:lp * 2 + 2, c * 8:c * 8 + 8].reshape(-1, 3)
             cd[lp][c] = dist16(px)
+            cppw[lp][c] = (px * _WT) @ pw.T
+
+    def pair_cost(d, ppw, sprite_d, tex):
+        """Per-cell cost cij[i,j] for choosing ink=i, paper=j, blended between the
+        *nearest-endpoint* error (tex=0, flat/accurate) and the *dithered* error
+        (tex=1, distance to the i..j segment -- bracketing colours the FS dither
+        blends, giving texture). The sprite is a 3rd point in both. d=(px,col)
+        squared distances, ppw=(px,col) P.pw dot products."""
+        m = np.minimum(d, sprite_d[:, None]) if sprite_d is not None else d
+        near = np.minimum(m[:, :, None], m[:, None, :]).sum(0)        # nearest-endpoint
+        if tex <= 0:
+            return near
+        # dist^2 to segment [i,j]: t = (P-A).(B-A)/|B-A|^2; clamp; line dist via Pythagoras
+        dot = (ppw[:, None, :] - ppw[:, :, None]) - (pwpw[None] - diag[:, None][None])  # (px,i,j)
+        t = dot / ab2[None]
+        line = d[:, :, None] - (np.clip(t, 0, 1) ** 2) * ab2[None]    # (px,i,j)
+        seg = np.where(t < 0, d[:, :, None], np.where(t > 1, d[:, None, :], line))
+        if sprite_d is not None:
+            seg = np.minimum(seg, sprite_d[:, None, None])
+        seg = seg.sum(0)
+        return (1 - tex) * near + tex * seg
 
     ink = np.zeros((100, 40), int)
     paper = np.zeros((100, 40), int)
@@ -86,11 +120,9 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0) -> byte
     for lp in range(100):
         for _ in range(iters):
             for c in range(40):
-                d = cd[lp][c]                                # (16px,16col)
                 s = spr[lp, _sprite_of_col(c)] if 0 <= _sprite_of_col(c) else -1
-                base = d[:, s] if s >= 0 else np.full(16, 1e18)
-                m = np.minimum(d, base[:, None])             # best of (k, sprite) per px
-                cij = np.minimum(m[:, :, None], m[:, None, :]).sum(0)  # (16,16) pair cost
+                sprite_d = cd[lp][c][:, s] if s >= 0 else None
+                cij = pair_cost(cd[lp][c], cppw[lp][c], sprite_d, texture)
                 if lp > 0:                                   # coherence vs cell above
                     pi, pj = int(ink[lp - 1, c]), int(paper[lp - 1, c])
                     new = ((iv != pi) & (iv != pj)).astype(float) * COHERE
