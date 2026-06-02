@@ -92,8 +92,8 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0) -> byte
                 m = np.minimum(d, base[:, None])             # best of (k, sprite) per px
                 cij = np.minimum(m[:, :, None], m[:, None, :]).sum(0)  # (16,16) pair cost
                 if lp > 0:                                   # coherence vs cell above
-                    prev = {int(ink[lp - 1, c]), int(paper[lp - 1, c])}
-                    new = (~np.isin(iv, list(prev))).astype(float) * COHERE
+                    pi, pj = int(ink[lp - 1, c]), int(paper[lp - 1, c])
+                    new = ((iv != pi) & (iv != pj)).astype(float) * COHERE
                     cij = cij + new[:, None] + new[None, :]
                 i, j = np.unravel_index(int(np.argmin(cij)), (16, 16))
                 ink[lp, c], paper[lp, c] = i, j
