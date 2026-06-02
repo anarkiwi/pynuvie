@@ -105,8 +105,9 @@ def make_frame(i: int):
     # Colour swatch strip.
     for k in range(16):
         x0 = SWATCH_X0 + k * SWATCH_W
-        d.rectangle([x0, SWATCH_Y0, x0 + SWATCH_W - 1, SWATCH_Y0 + SWATCH_H - 1],
-                    fill=C64_PALETTE[k])
+        d.rectangle(
+            [x0, SWATCH_Y0, x0 + SWATCH_W - 1, SWATCH_Y0 + SWATCH_H - 1], fill=C64_PALETTE[k]
+        )
 
     # Moving block (redundant motion cue).
     span = 230
@@ -125,10 +126,20 @@ def generate_pngs(outdir: str, frames: int) -> None:
 def encode_mp4(pngdir: str, out_mp4: str, frames: int) -> None:
     subprocess.run(
         [
-            "ffmpeg", "-y", "-framerate", str(FPS),
-            "-i", os.path.join(pngdir, "f%04d.png"),
-            "-frames:v", str(frames),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS),
+            "ffmpeg",
+            "-y",
+            "-framerate",
+            str(FPS),
+            "-i",
+            os.path.join(pngdir, "f%04d.png"),
+            "-frames:v",
+            str(frames),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-r",
+            str(FPS),
             out_mp4,
         ],
         check=True,

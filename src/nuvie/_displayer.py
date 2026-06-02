@@ -55,10 +55,10 @@ def _decode(value: int, sprite_reg: int):
     """NUVIEmaker ``$33b0``: map a colour-table cell to (LDY operand, STY reg)."""
     hi = value >> 4
     if hi == 0:
-        return value, sprite_reg          # normal colour -> STY $d028+col
+        return value, sprite_reg  # normal colour -> STY $d028+col
     if hi == 1:
-        return 0xD4, value & 0x0F          # sprite-position switch -> STY $d0(lo)
-    return value, 0x20 | hi                # flibug colour switch -> STY $d0(hi|$20)
+        return 0xD4, value & 0x0F  # sprite-position switch -> STY $d0(lo)
+    return value, 0x20 | hi  # flibug colour switch -> STY $d0(hi|$20)
 
 
 @lru_cache(maxsize=1)

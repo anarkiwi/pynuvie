@@ -16,9 +16,10 @@ import subprocess
 import tempfile
 
 # makenuvie's video settings (YUV prep + dither, Pepto palette).
-_FLAGS = ["--otype", "nufli", "-p", "--dither", "--prep_mode", "yuv",
-          "--weight_u", "1", "--weight_v", "0.5", "--dest-palette", "pepto",
-          "--no-truncate", "--shutup"]
+_FLAGS = (
+    "--otype nufli -p --dither --prep_mode yuv --weight_u 1 --weight_v 0.5 "
+    "--dest-palette pepto --no-truncate --shutup"
+).split()
 
 
 def find_mufflon(mufflon_bin: str | None = None) -> str:
@@ -27,7 +28,8 @@ def find_mufflon(mufflon_bin: str | None = None) -> str:
     if not path or not os.path.exists(path):
         raise FileNotFoundError(
             "mufflon binary not found; build it and set NUVIE_MUFFLON=/path/to/mufflon "
-            "or pass mufflon_bin=... (or use backend='clean')")
+            "or pass mufflon_bin=... (or use backend='clean')"
+        )
     return path
 
 
@@ -45,7 +47,8 @@ def encode_via_mufflon(img, flibug: bool = True, mufflon_bin: str | None = None)
             args.append("--flibug")
         env = {**os.environ, "OMP_NUM_THREADS": "1"}  # deterministic
         subprocess.run(args, check=True, capture_output=True, env=env)
-        data = open(out, "rb").read()
+        with open(out, "rb") as f:
+            data = f.read()
         return data[2:] if data[:2] == b"\x00\x20" else data  # strip $2000 load addr
     finally:
         shutil.rmtree(work, ignore_errors=True)

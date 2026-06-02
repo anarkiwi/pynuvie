@@ -53,7 +53,8 @@ def _cmd_extract(args) -> int:
 def _cmd_build(args) -> int:
     movie = Nuvie()
     for i, path in enumerate(args.slots):
-        data = open(path, "rb").read()
+        with open(path, "rb") as f:
+            data = f.read()
         if len(data) != SLOT_SIZE:
             print(f"error: {path} is {len(data)} bytes, expected {SLOT_SIZE}", file=sys.stderr)
             return 1
@@ -66,7 +67,14 @@ def _cmd_build(args) -> int:
 def _cmd_encode(args) -> int:
     from .encode import encode_video
 
-    n = encode_video(args.video, args.out, fps=args.fps, max_frames=args.max_frames)
+    n = encode_video(
+        args.video,
+        args.out,
+        fps=args.fps,
+        max_frames=args.max_frames,
+        backend=args.backend,
+        mufflon_bin=args.mufflon_bin,
+    )
     print(f"encoded {n} frames from {args.video} to {args.out}")
     return 0
 
@@ -74,7 +82,7 @@ def _cmd_encode(args) -> int:
 def _cmd_testpattern(args) -> int:
     from .testpattern import build
 
-    movie = build(args.out, n=args.frames, dither=args.dither)
+    movie = build(args.out, n=args.frames, style=args.style, backend=args.backend)
     print(f"wrote {movie.count_frames()}-frame test pattern to {args.out}")
     return 0
 
@@ -103,17 +111,22 @@ def main(argv=None) -> int:
     pb.add_argument("-o", "--out", required=True)
     pb.set_defaults(func=_cmd_build)
 
-    pn = sub.add_parser("encode", help="encode a video file into a .reu (no mufflon)")
+    pn = sub.add_parser("encode", help="encode a video file into a .reu")
     pn.add_argument("video")
     pn.add_argument("-o", "--out", required=True)
     pn.add_argument("--fps", type=float, default=12.5)
     pn.add_argument("--max-frames", type=int, default=768)
+    pn.add_argument("--backend", choices=("clean", "mufflon"), default="clean")
+    pn.add_argument("--mufflon-bin", default=None)
     pn.set_defaults(func=_cmd_encode)
 
-    pt = sub.add_parser("testpattern", help="generate an animated test-pattern .reu (no video needed)")
+    pt = sub.add_parser(
+        "testpattern", help="generate an animated test-pattern .reu (no video needed)"
+    )
     pt.add_argument("-o", "--out", required=True)
     pt.add_argument("-n", "--frames", type=int, default=64)
-    pt.add_argument("--dither", action="store_true")
+    pt.add_argument("--style", choices=("colour", "greyscale"), default="colour")
+    pt.add_argument("--backend", choices=("clean", "mufflon"), default="clean")
     pt.set_defaults(func=_cmd_testpattern)
 
     args = p.parse_args(argv)

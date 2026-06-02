@@ -5,15 +5,16 @@ play the .reu on the real nuvieplayer in VICE, and save screenshots.
 This is the inverse of verify_decode.py and closes the loop on the encoder +
 pack path. Requires Docker + the nuviemaker:local image (see README). Manual.
 """
+
 import os
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
-import make_movie as mm  # noqa: E402
+import make_movie as mm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-from nuvie.pack import build_movie  # noqa: E402
+from nuvie.pack import build_movie
 
 FRAMES = [0, 1, 2, 5, 14, 42]
 

@@ -23,7 +23,8 @@ dependencies = []
 
 [project.optional-dependencies]
 image = ["Pillow>=9.0", "numpy>=1.20"]
-dev = ["pytest>=7", "pytest-cov", "Pillow>=9.0", "numpy>=1.20", "build", "ruff"]
+dev = ["pytest>=7", "pytest-cov", "Pillow>=9.0", "numpy>=1.20", "numba>=0.58",
+       "build", "ruff", "black>=24", "pylint>=3"]
 
 [project.urls]
 Homepage = "https://github.com/anarkiwi/pynuvie"
@@ -51,3 +52,28 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.pylint.main]
+# numba is imported lazily inside functions; don't fail if it isn't installed.
+ignored-modules = ["numba"]
+# tests/integration scripts share helper modules from their own directory and run
+# with src/ on the path; let pylint resolve them the same way pytest does.
+init-hook = 'import sys; sys.path[:0] = ["src", "tests/integration"]'
+
+[tool.pylint."messages control"]
+# Keep the checks that matter (errors + unused imports/vars/args); silence the
+# purely stylistic / heuristic ones that would otherwise bury the signal.
+# Unused-import / unused-variable / unused-argument stay enabled.
+disable = [
+    "missing-module-docstring", "missing-class-docstring", "missing-function-docstring",
+    "invalid-name", "too-few-public-methods", "too-many-locals", "too-many-branches",
+    "too-many-statements", "too-many-arguments", "too-many-nested-blocks",
+    "too-many-instance-attributes", "too-many-return-statements", "import-outside-toplevel",
+    "duplicate-code", "fixme", "consider-using-f-string", "use-dict-literal",
+    "broad-exception-caught", "global-statement", "unbalanced-tuple-unpacking",
+    "cyclic-import", "wrong-import-position",
+]

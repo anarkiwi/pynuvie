@@ -23,13 +23,14 @@ try:
     from importlib.resources import files
 
     def _load_raw() -> list:
-        return json.loads((files("nuvie.data") / "slotmap.json").read_text())
+        return json.loads((files("nuvie.data") / "slotmap.json").read_text(encoding="utf-8"))
+
 except Exception:  # pragma: no cover
     import os
 
     def _load_raw() -> list:
         here = os.path.join(os.path.dirname(__file__), "data", "slotmap.json")
-        with open(here) as f:
+        with open(here, encoding="utf-8") as f:
             return json.load(f)
 
 

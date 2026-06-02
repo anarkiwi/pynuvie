@@ -13,9 +13,11 @@ def test_build_slot_matches_real_nuviemaker_slot():
     """Packing a real mufflon .nuf must reproduce the slot NUVIEmaker itself
     produced (captured from the C64), to within the handful of displayer-setup
     bytes. This guards the pack table + source template against regressions."""
-    nuf = NufliImage.from_prg(open(os.path.join(FIX, "nufli_sample.nuf"), "rb").read())
+    with open(os.path.join(FIX, "nufli_sample.nuf"), "rb") as f:
+        nuf = NufliImage.from_prg(f.read())
     slot = build_slot(nuf)
-    real = open(os.path.join(FIX, "pack_sample_slot.bin"), "rb").read()
+    with open(os.path.join(FIX, "pack_sample_slot.bin"), "rb") as f:
+        real = f.read()
     assert len(slot) == SLOT_SIZE == len(real)
     match = sum(1 for a, b in zip(slot, real) if a == b)
     assert match / len(slot) > 0.999  # 99.9%+ identical to NUVIEmaker's output
@@ -48,11 +50,13 @@ def test_build_movie_caps_at_max_frames(monkeypatch):
     pytest.importorskip("PIL")
     from PIL import Image
 
-    import nuvie.pack as pack
+    from nuvie import pack
 
     # encoding 768+ frames for real is far too slow; stub the per-frame work.
-    monkeypatch.setattr(pack, "build_slot", lambda img: bytes([1]) + bytes(SLOT_SIZE - 1))
-    monkeypatch.setattr(NufliImage, "from_image", classmethod(lambda cls, *a, **k: cls(bytes(0x5A00))))
+    monkeypatch.setattr(pack, "build_slot", lambda _img: bytes([1]) + bytes(SLOT_SIZE - 1))
+    monkeypatch.setattr(
+        NufliImage, "from_image", classmethod(lambda cls, *_a, **_k: cls(bytes(0x5A00)))
+    )
 
     def gen():
         for _ in range(MAX_FRAMES + 5):

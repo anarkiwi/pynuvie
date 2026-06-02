@@ -68,9 +68,9 @@ def _graphics_offsets() -> frozenset:
     o2, l2 = _BITMAP_LO
     offs.update(range(o1, o1 + l1))
     offs.update(range(o2, o2 + l2))
-    for by in range(len(NUIFLI_SCRAM)):
+    for base in NUIFLI_SCRAM:
         for cx in range(40):
-            offs.add(NUIFLI_SCRAM[by] + cx)
+            offs.add(base + cx)
     for addr in _sprite_addr_map().values():
         offs.add(addr)
     for s in range(N_MAIN_SPRITES):
@@ -126,8 +126,14 @@ def _sequential_playlist(n: int):
     return Playlist(tokens)
 
 
-def build_movie(images, out_path: Optional[str] = None, backend: str = "clean",
-                flibug: bool = True, cohere: float = 600.0, mufflon_bin=None) -> Nuvie:
+def build_movie(
+    images,
+    out_path: Optional[str] = None,
+    backend: str = "clean",
+    flibug: bool = True,
+    cohere: float = 600.0,
+    mufflon_bin=None,
+) -> Nuvie:
     """Encode an iterable of Pillow images into a full-colour NUVIE.
 
     Each image is NUFLI-encoded (``backend`` = ``"clean"`` pynuvie encoder, or
@@ -141,8 +147,9 @@ def build_movie(images, out_path: Optional[str] = None, backend: str = "clean",
     for i, img in enumerate(images):
         if i >= MAX_FRAMES:
             break
-        nuf = NufliImage.from_image(img, backend=backend, flibug=flibug,
-                                    cohere=cohere, mufflon_bin=mufflon_bin)
+        nuf = NufliImage.from_image(
+            img, backend=backend, flibug=flibug, cohere=cohere, mufflon_bin=mufflon_bin
+        )
         movie.set_frame(i, build_slot(nuf))
         n = i + 1
     movie.set_playlist(_sequential_playlist(n))

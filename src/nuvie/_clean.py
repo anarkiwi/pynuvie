@@ -22,6 +22,16 @@ from __future__ import annotations
 
 import numpy as np
 
+try:  # numba is an optional accelerator; the kernels run pure-Python without it.
+    from numba import njit
+except ImportError:  # pragma: no cover
+
+    def njit(*args, **_kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        return lambda f: f
+
+
 from .nufli import (
     NUFLI_BODY_SIZE,
     NUIFLI_SCRAM,
@@ -35,9 +45,73 @@ from .palette import C64_PALETTE
 WIDTH, HEIGHT, FLI = 320, 200, 24
 INK, PAPER, SPRITE = 0, 1, 2
 # the 7 hardware-valid (left,right) source pairs for a 2px sprite-pair.
-_COMB = ((INK, INK), (INK, SPRITE), (INK, PAPER), (PAPER, INK),
-         (PAPER, PAPER), (SPRITE, SPRITE), (SPRITE, INK))
+_COMB = (
+    (INK, INK),
+    (INK, SPRITE),
+    (INK, PAPER),
+    (PAPER, INK),
+    (PAPER, PAPER),
+    (SPRITE, SPRITE),
+    (SPRITE, INK),
+)
+_COMB_ARR = np.array(_COMB, np.int64)  # numba-friendly view of _COMB
 _WT = np.array([1.0, 0.7, 0.7])  # YUV channel weights (luma-dominant, perceptual)
+
+
+@njit(cache=True)
+def _dither_kernel(work, palv, wt, comb, ink, paper, spr):
+    """Serpentine 2px-pair Floyd-Steinberg over ``work`` (H,W,3, mutated in place).
+
+    For each 2px pair it picks the cheapest hardware-valid (left,right) source combo
+    from {ink, paper, sprite} and diffuses the residual to neighbours. Returns the
+    per-pixel source labels (0=ink, 1=paper, 2=sprite). The visit/accumulation order
+    is identical to the reference loop so the float output is bit-for-bit the same."""
+    h, w = work.shape[0], work.shape[1]
+    label = np.zeros((h, w), np.int8)
+    for y in range(h):
+        lp = y >> 1
+        has_nxt = y + 1 < h
+        l2r = (y & 1) == 0
+        direction = 1 if l2r else -1
+        x = 0 if l2r else w - 2
+        while 0 <= x <= w - 2:
+            c = x >> 3
+            s = (c - 3) // 6 if 3 <= c <= 38 else -1
+            ci, cp = ink[lp, c], paper[lp, c]
+            cs = spr[lp, s] if s >= 0 else -1
+            best, bca, bcb = 1e30, 0, 0
+            for t in range(comb.shape[0]):
+                ca, cb = comb[t, 0], comb[t, 1]
+                k0 = ci if ca == 0 else (cp if ca == 1 else cs)
+                k1 = ci if cb == 0 else (cp if cb == 1 else cs)
+                if k0 < 0 or k1 < 0:
+                    continue
+                cost = 0.0
+                for ch in range(3):
+                    e0 = (work[y, x, ch] - palv[k0, ch]) * wt[ch]
+                    e1 = (work[y, x + 1, ch] - palv[k1, ch]) * wt[ch]
+                    cost += e0 * e0 + e1 * e1
+                if cost < best:
+                    best, bca, bcb = cost, ca, cb
+            label[y, x], label[y, x + 1] = bca, bcb
+            k0 = ci if bca == 0 else (cp if bca == 1 else cs)
+            k1 = ci if bcb == 0 else (cp if bcb == 1 else cs)
+            for which in range(2):
+                xx = x + which
+                kk = k0 if which == 0 else k1
+                fx = xx + direction
+                for ch in range(3):
+                    qe = work[y, xx, ch] - palv[kk, ch]
+                    if 0 <= fx < w:
+                        work[y, fx, ch] += (7.0 / 16.0) * qe
+                    if has_nxt:
+                        if 0 <= xx - direction < w:
+                            work[y + 1, xx - direction, ch] += (3.0 / 16.0) * qe
+                        work[y + 1, xx, ch] += (5.0 / 16.0) * qe
+                        if 0 <= fx < w:
+                            work[y + 1, fx, ch] += (1.0 / 16.0) * qe
+            x += 2 * direction
+    return label
 
 
 def _yuv(a):
@@ -51,8 +125,9 @@ def _sprite_of_col(c):
     return (c - 3) // 6 if 3 <= c <= 38 else -1
 
 
-def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
-                 texture: float = 0.7) -> bytearray:
+def encode_clean(
+    rgb: np.ndarray, iters: int = 3, cohere: float = 600.0, texture: float = 0.7
+) -> bytearray:
     """FLI-aware encode of ``rgb`` (200,320,3) to a NUFLI body. Fills the main
     image (char cols 3..39); cols 0..2 are left for the flibug edge.
 
@@ -62,8 +137,8 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
     (0 = flat, lowest MSE) and dithered/segment error (1 = bracketing colours the
     dither blends, mufflon-like high-frequency texture)."""
     COHERE = cohere
-    pal = _yuv(np.array(C64_PALETTE, dtype=np.float64))     # (16,3)
-    img = _yuv(rgb.astype(np.float64))                      # (200,320,3)
+    pal = _yuv(np.array(C64_PALETTE, dtype=np.float64))  # (16,3)
+    img = _yuv(rgb.astype(np.float64))  # (200,320,3)
 
     def dist16(v):  # weighted sq distance of values v(...,3) to the 16 colours
         d = (v[..., None, :] - pal[None, ...]) * _WT
@@ -74,36 +149,39 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
     # between ink and paper, not the nearer endpoint), so bracketing colours the
     # FS dither can blend into the true shade win -- that's what gives texture
     # instead of collapsing sub-palette gradients to a flat colour.
-    pw = pal * _WT                                   # weighted palette (16,3)
-    pwpw = pw @ pw.T                                 # (16,16) dot products
-    ab2 = (pwpw.diagonal()[:, None] + pwpw.diagonal()[None, :] - 2 * pwpw)  # |pw_j-pw_i|^2
-    ab2 = np.where(ab2 > 1e-9, ab2, 1.0)             # (16i,16j)
+    pw = pal * _WT  # weighted palette (16,3)
+    pwpw = pw @ pw.T  # (16,16) dot products
+    ab2 = pwpw.diagonal()[:, None] + pwpw.diagonal()[None, :] - 2 * pwpw  # |pw_j-pw_i|^2
+    ab2 = np.where(ab2 > 1e-9, ab2, 1.0)  # (16i,16j)
     diag = pwpw.diagonal()
-    cd = [[None] * 40 for _ in range(100)]           # cd[lp][c] = (16px,16col)
-    cppw = [[None] * 40 for _ in range(100)]         # P . pw  (16px,16col)
+    cd = [[None] * 40 for _ in range(100)]  # cd[lp][c] = (16px,16col)
+    cppw = [[None] * 40 for _ in range(100)]  # P . pw  (16px,16col)
     for lp in range(100):
         for c in range(40):
-            px = img[lp * 2:lp * 2 + 2, c * 8:c * 8 + 8].reshape(-1, 3)
+            px = img[lp * 2 : lp * 2 + 2, c * 8 : c * 8 + 8].reshape(-1, 3)
             cd[lp][c] = dist16(px)
             cppw[lp][c] = (px * _WT) @ pw.T
 
-    def pair_cost(d, ppw, sprite_d, tex):
+    def seg_pre_of(d, ppw):
+        """Per-pixel dist^2 to the i..j palette segment, ``(px,16,16)``, sprite-free.
+        Depends only on the cell (d, ppw) so it is hoisted out of the iters loop."""
+        # dist^2 to segment [i,j]: t = (P-A).(B-A)/|B-A|^2; clamp; line dist via Pythagoras
+        dot = (ppw[:, None, :] - ppw[:, :, None]) - (pwpw[None] - diag[:, None][None])  # (px,i,j)
+        t = dot / ab2[None]
+        line = d[:, :, None] - (np.clip(t, 0, 1) ** 2) * ab2[None]  # (px,i,j)
+        return np.where(t < 0, d[:, :, None], np.where(t > 1, d[:, None, :], line))
+
+    def pair_cost(d, seg_pre, sprite_d, tex):
         """Per-cell cost cij[i,j] for choosing ink=i, paper=j, blended between the
         *nearest-endpoint* error (tex=0, flat/accurate) and the *dithered* error
         (tex=1, distance to the i..j segment -- bracketing colours the FS dither
         blends, giving texture). The sprite is a 3rd point in both. d=(px,col)
-        squared distances, ppw=(px,col) P.pw dot products."""
+        squared distances, ``seg_pre`` the cached sprite-free segment distances."""
         m = np.minimum(d, sprite_d[:, None]) if sprite_d is not None else d
-        near = np.minimum(m[:, :, None], m[:, None, :]).sum(0)        # nearest-endpoint
+        near = np.minimum(m[:, :, None], m[:, None, :]).sum(0)  # nearest-endpoint
         if tex <= 0:
             return near
-        # dist^2 to segment [i,j]: t = (P-A).(B-A)/|B-A|^2; clamp; line dist via Pythagoras
-        dot = (ppw[:, None, :] - ppw[:, :, None]) - (pwpw[None] - diag[:, None][None])  # (px,i,j)
-        t = dot / ab2[None]
-        line = d[:, :, None] - (np.clip(t, 0, 1) ** 2) * ab2[None]    # (px,i,j)
-        seg = np.where(t < 0, d[:, :, None], np.where(t > 1, d[:, None, :], line))
-        if sprite_d is not None:
-            seg = np.minimum(seg, sprite_d[:, None, None])
+        seg = np.minimum(seg_pre, sprite_d[:, None, None]) if sprite_d is not None else seg_pre
         seg = seg.sum(0)
         return (1 - tex) * near + tex * seg
 
@@ -118,12 +196,14 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
     # switch continuity) instead of churning per line-pair, which would streak.
     iv = np.arange(16)
     for lp in range(100):
+        # segment geometry is sprite-free and constant across iters -- compute once.
+        cseg = [seg_pre_of(cd[lp][c], cppw[lp][c]) for c in range(40)] if texture > 0 else None
         for _ in range(iters):
             for c in range(40):
                 s = spr[lp, _sprite_of_col(c)] if 0 <= _sprite_of_col(c) else -1
                 sprite_d = cd[lp][c][:, s] if s >= 0 else None
-                cij = pair_cost(cd[lp][c], cppw[lp][c], sprite_d, texture)
-                if lp > 0:                                   # coherence vs cell above
+                cij = pair_cost(cd[lp][c], cseg[c] if cseg is not None else None, sprite_d, texture)
+                if lp > 0:  # coherence vs cell above
                     pi, pj = int(ink[lp - 1, c]), int(paper[lp - 1, c])
                     new = ((iv != pi) & (iv != pj)).astype(float) * COHERE
                     cij = cij + new[:, None] + new[None, :]
@@ -131,57 +211,20 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
                 ink[lp, c], paper[lp, c] = i, j
             for s in range(6):
                 cols = range(3 + 6 * s, 9 + 6 * s)
-                ck = np.zeros(16)                            # cost of sprite colour k
+                ck = np.zeros(16)  # cost of sprite colour k
                 for c in cols:
                     d = cd[lp][c]
                     bb = np.minimum(d[:, ink[lp, c]], d[:, paper[lp, c]])
                     ck += np.minimum(bb[:, None], d).sum(0)
-                if lp > 0:                                   # coherence vs region above
+                if lp > 0:  # coherence vs region above
                     ck = ck + (iv != int(spr[lp - 1, s])).astype(float) * COHERE
                 spr[lp, s] = int(np.argmin(ck))
 
     # --- 2px-pair Floyd-Steinberg to each cell's {ink,paper,sprite}, with feedback ---
     # Serpentine scan (alternate row direction) so the residual doesn't bias one way
     # and streak horizontally; diffuse the combo-quantisation residual to neighbours.
-    work = img.copy()
-    palv = pal
-    label = np.zeros((HEIGHT, WIDTH), np.int8)   # 0=PAPER,1=INK,2=SPRITE per pixel
-    for y in range(HEIGHT):
-        lp = y >> 1
-        nxt = work[y + 1] if y + 1 < HEIGHT else None
-        l2r = (y & 1) == 0
-        pairs = range(0, WIDTH, 2) if l2r else range(WIDTH - 2, -1, -2)
-        d = 1 if l2r else -1                       # forward direction
-        for x in pairs:
-            c = x >> 3
-            s = _sprite_of_col(c)
-            cols = {INK: ink[lp, c], PAPER: paper[lp, c],
-                    SPRITE: (spr[lp, s] if s >= 0 else -1)}
-            v0, v1 = work[y, x], work[y, x + 1]
-            best, bc = 1e30, (INK, INK)
-            for ca, cb in _COMB:
-                k0, k1 = cols[ca], cols[cb]
-                if k0 < 0 or k1 < 0:
-                    continue
-                e0 = (v0 - palv[k0]) * _WT
-                e1 = (v1 - palv[k1]) * _WT
-                cost = (e0 * e0).sum() + (e1 * e1).sum()
-                if cost < best:
-                    best, bc = cost, (ca, cb)
-            label[y, x], label[y, x + 1] = bc
-            k0, k1 = cols[bc[0]], cols[bc[1]]
-            # diffuse residual (Floyd-Steinberg) in the scan direction
-            for xx, kk in ((x, k0), (x + 1, k1)):
-                qe = work[y, xx] - palv[kk]
-                fx = xx + d
-                if 0 <= fx < WIDTH:
-                    work[y, fx] += 7 / 16 * qe
-                if nxt is not None:
-                    if 0 <= xx - d < WIDTH:
-                        nxt[xx - d] += 3 / 16 * qe
-                    nxt[xx] += 5 / 16 * qe
-                    if 0 <= fx < WIDTH:
-                        nxt[fx] += 1 / 16 * qe
+    work = np.ascontiguousarray(img, dtype=np.float64).copy()
+    label = _dither_kernel(work, pal, _WT, _COMB_ARR, ink, paper, spr)
 
     # --- assemble the NUFLI body ---
     body = bytearray(NUFLI_BODY_SIZE)
@@ -205,16 +248,16 @@ def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0,
             hires[(y >> 3) * WIDTH + cx * 8 + (y & 7)] = b
     o1, l1 = _BITMAP_HI
     o2, l2 = _BITMAP_LO
-    body[o1:o1 + l1] = hires[0:l1]
-    body[o2:o2 + l2] = hires[l1:l1 + l2]
+    body[o1 : o1 + l1] = hires[0:l1]
+    body[o2 : o2 + l2] = hires[l1 : l1 + l2]
     # main sprite bitmaps (SPRITE labels), 2px-wide sprite pixels
     addr = _sprite_addr_map()
     sbm = {}
     for y in range(HEIGHT):
         for x in range(FLI, WIDTH - 8, 2):
             if label[y, x] == SPRITE:
-                col = (x - FLI) // 16            # byte index 0..17 (6 sprites x 3)
-                bit = ((x - FLI) % 16) // 2      # 0..7 within byte
+                col = (x - FLI) // 16  # byte index 0..17 (6 sprites x 3)
+                bit = ((x - FLI) % 16) // 2  # 0..7 within byte
                 sbm[(y, col)] = sbm.get((y, col), 0) | (1 << (7 - bit))
     for (y, col), val in sbm.items():
         if (y, col) in addr:

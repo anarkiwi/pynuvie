@@ -1,15 +1,10 @@
-"""Encode ordinary images / video into NUVIE frames -- no ``mufflon`` required.
+"""Encode ordinary images / video into NUVIE frames.
 
-This turns a 320x200 picture into the bytes of a NUVIE frame slot and packs a
-sequence of them into a ``.reu``, so a video can be converted end-to-end in pure
-Python.
-
-Fidelity note: the reference player renders frames as NUFLI (FLI hi-res with a
-sprite colour underlay). This encoder produces the hi-res **bitmap** (placed at
-the player's bitmap address via :mod:`nuvie.slotmap`) with a chosen two-colour
-ink/paper per frame. Full per-8x2 FLI colour and the sprite underlay are not yet
-emitted, so output is effectively two-colour hi-res. The container, playlist and
-frame placement are exact.
+:func:`encode_video` is the end-to-end entry point: it decodes a video and writes
+a player-ready ``.reu`` using the FLI-aware :mod:`nuvie._clean` encoder (or the
+``mufflon`` backend). :func:`encode_frame_slot` is a lightweight single-image
+two-colour hi-res encoder used by the fast pipeline regression tests; it places
+the hi-res bitmap at the player's bitmap address via :mod:`nuvie.slotmap`.
 """
 
 from __future__ import annotations
@@ -69,9 +64,19 @@ def _video_frames(video: str, fps: float, max_frames: int):
 
     with tempfile.TemporaryDirectory() as td:
         subprocess.run(
-            ["ffmpeg", "-i", video, "-vf", f"fps={fps},scale={WIDTH}:{HEIGHT}",
-             "-frames:v", str(max_frames), os.path.join(td, "f%04d.png")],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            [
+                "ffmpeg",
+                "-i",
+                video,
+                "-vf",
+                f"fps={fps},scale={WIDTH}:{HEIGHT}",
+                "-frames:v",
+                str(max_frames),
+                os.path.join(td, "f%04d.png"),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         names = sorted(os.listdir(td))
         for n in names:
@@ -100,9 +105,16 @@ def build_reu(frame_slots: List[bytes], out_path: Optional[str] = None) -> Nuvie
     return movie
 
 
-def encode_video(video: str, out_path: str, fps: float = 12.5, max_frames: int = MAX_FRAMES,
-                 backend: str = "clean", flibug: bool = True, cohere: float = 600.0,
-                 mufflon_bin=None) -> int:
+def encode_video(
+    video: str,
+    out_path: str,
+    fps: float = 12.5,
+    max_frames: int = MAX_FRAMES,
+    backend: str = "clean",
+    flibug: bool = True,
+    cohere: float = 600.0,
+    mufflon_bin=None,
+) -> int:
     """Encode a video file into a full-colour, player-ready NUVIE ``.reu``.
 
     Decodes the video to frames, NUFLI-encodes each (``backend`` = ``"clean"``
@@ -114,6 +126,7 @@ def encode_video(video: str, out_path: str, fps: float = 12.5, max_frames: int =
     from .pack import build_movie
 
     frames = list(_video_frames(video, fps, max_frames))
-    build_movie(frames, out_path, backend=backend, flibug=flibug, cohere=cohere,
-                mufflon_bin=mufflon_bin)
+    build_movie(
+        frames, out_path, backend=backend, flibug=flibug, cohere=cohere, mufflon_bin=mufflon_bin
+    )
     return len(frames)

@@ -123,7 +123,8 @@ def test_sprite_underlay_matches_mufflon():
     from PIL import Image
 
     here = os.path.join(os.path.dirname(__file__), "fixtures")
-    nuf = NufliImage.from_prg(open(os.path.join(here, "nufli_sample.nuf"), "rb").read())
+    with open(os.path.join(here, "nufli_sample.nuf"), "rb") as f:
+        nuf = NufliImage.from_prg(f.read())
     ref = Image.open(os.path.join(here, "nufli_sample_result.png")).convert("RGB")
     main = range(24, 312)
     with_sprites = _mse(nuf.to_image(), ref, main)
