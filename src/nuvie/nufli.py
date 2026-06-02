@@ -40,21 +40,21 @@ _BITMAP_LO = (0x1400, 0x0B40)
 
 # Screen-RAM (ink<<4 | paper) address for each of the 100 even-line 8x2 rows,
 # verbatim from mufflon.h `nuifli_scram`. Index = y // 2; add the column (0..39).
-NUIFLI_SCRAM: List[int] = [
-    0x3C00, 0x3800, 0x3400, 0x3000, 0x2C28, 0x2828, 0x2428, 0x2028,
-    0x3C50, 0x3850, 0x3450, 0x3050, 0x2C78, 0x2878, 0x2478, 0x2078,
-    0x3CA0, 0x38A0, 0x34A0, 0x30A0, 0x2CC8, 0x28C8, 0x24C8, 0x20C8,
-    0x3CF0, 0x38F0, 0x34F0, 0x30F0, 0x2D18, 0x2918, 0x2518, 0x2118,
-    0x3D40, 0x3940, 0x3540, 0x3140, 0x2D68, 0x2968, 0x2568, 0x2168,
-    0x3D90, 0x3990, 0x3590, 0x3190, 0x2DB8, 0x29B8, 0x25B8, 0x21B8,
-    0x3DE0, 0x39E0, 0x35E0, 0x31E0, 0x2E08, 0x2A08, 0x2608, 0x2208,
-    0x3E30, 0x3A30, 0x3630, 0x3230, 0x2E58, 0x2A58, 0x2658, 0x2258,
-    0x0280, 0x0680, 0x0A80, 0x0E80, 0x02A8, 0x06A8, 0x0AA8, 0x0EA8,
-    0x02D0, 0x06D0, 0x0AD0, 0x0ED0, 0x02F8, 0x06F8, 0x0AF8, 0x0EF8,
-    0x0320, 0x0720, 0x0B20, 0x0F20, 0x0748, 0x0B48, 0x0F48, 0x0348,
-    0x0770, 0x0B70, 0x0F70, 0x0370, 0x0798, 0x0B98, 0x0F98, 0x0398,
-    0x07C0, 0x0BC0, 0x0FC0, 0x03C0,
-]
+NUIFLI_SCRAM: List[int] = [int(v, 16) for v in """
+    3C00 3800 3400 3000 2C28 2828 2428 2028
+    3C50 3850 3450 3050 2C78 2878 2478 2078
+    3CA0 38A0 34A0 30A0 2CC8 28C8 24C8 20C8
+    3CF0 38F0 34F0 30F0 2D18 2918 2518 2118
+    3D40 3940 3540 3140 2D68 2968 2568 2168
+    3D90 3990 3590 3190 2DB8 29B8 25B8 21B8
+    3DE0 39E0 35E0 31E0 2E08 2A08 2608 2208
+    3E30 3A30 3630 3230 2E58 2A58 2658 2258
+    0280 0680 0A80 0E80 02A8 06A8 0AA8 0EA8
+    02D0 06D0 0AD0 0ED0 02F8 06F8 0AF8 0EF8
+    0320 0720 0B20 0F20 0748 0B48 0F48 0348
+    0770 0B70 0F70 0370 0798 0B98 0F98 0398
+    07C0 0BC0 0FC0 03C0
+""".split()]
 
 
 # --- sprite underlay (the NUFLI third colour) ---
@@ -133,83 +133,48 @@ class NufliImage:
         return cls(data)
 
     @classmethod
-    def from_image(cls, img, third_colour: bool = True, dither: bool = False,
-                   flibug: bool = False, match_mufflon: bool = True) -> "NufliImage":
-        """Encode a Pillow image into a NUFLI graphics image, mufflon-free.
+    def from_image(
+        cls,
+        img,
+        backend: str = "clean",
+        flibug: bool = True,
+        cohere: float = 600.0,
+        mufflon_bin=None,
+    ) -> "NufliImage":
+        """Encode a Pillow image into a NUFLI graphics image.
 
-        Produces the hi-res bitmap + per-8x2 FLI ink/paper, and (when
-        ``third_colour`` is set) the six main hi-res sprites that add NUFLI's third
-        colour. With ``dither`` the image is Floyd-Steinberg dithered to the C64
-        palette first (mufflon's video look). Round-trips through
-        :meth:`decode_indices`.
+        Two backends:
 
-        With ``match_mufflon`` (default) the full-colour path uses the byte-exact
-        port of mufflon's colour optimiser (see :mod:`nuvie._mufflon`): for any
-        input whose pixels are exact Pepto-palette colours the bitmap, FLI screen
-        RAM, main sprite bitmaps and sprite colour table are **byte-identical** to
-        Crest's mufflon ``--otype nufli``. (For arbitrary RGB the only differences
-        are mufflon's ``-ffast-math`` 1-ULP rounding flips, which are compiler- not
-        algorithm-dependent.) Set ``match_mufflon=False`` for the older, faster
-        heuristic encoder.
+        * ``backend="clean"`` (default, pure-Python, no external tools): pynuvie's
+          own FLI-structure-aware encoder (:mod:`nuvie._clean`) -- co-designs the
+          per-cell ink/paper + per-region sprite colour with a 2px-pair
+          error-diffusion dither and vertical coherence (``cohere``).
+        * ``backend="mufflon"``: shell out to Crest's real ``mufflon`` binary (see
+          :mod:`nuvie._mufflon_driver`; set ``NUVIE_MUFFLON`` or pass
+          ``mufflon_bin``). The original tool's encoding, packed by pynuvie.
 
-        With ``flibug`` the leftmost-24px sprite plane is generated (see
-        :mod:`nuvie._flibug`) so the left edge renders cleanly on the reference
-        player instead of showing the VIC FLI-bug corruption. It coexists with the
-        ``third_colour`` main-sprite underlay: both share the sprite-colour table,
-        and the flibug's per-line colour switches are woven into its free slots
-        (where a main sprite colour is unchanged), exactly as NUVIEmaker does.
+        With ``flibug`` the leftmost-24px sprite plane is generated so the left edge
+        renders cleanly instead of the VIC FLI-bug corruption (for ``clean`` via
+        :mod:`nuvie._flibug`; for ``mufflon`` via its ``--flibug``). ``build_slot``
+        regenerates the per-frame displayer from the body's colour table.
         """
-        global _SPRITE_MAP
-        from ._hires import dither_to_palette, encode_hires
+        if backend == "mufflon":
+            from ._mufflon_driver import encode_via_mufflon
 
-        if dither:
-            img = dither_to_palette(img)
-
-        if match_mufflon and third_colour:
+            body = bytearray(encode_via_mufflon(img, flibug=flibug, mufflon_bin=mufflon_bin))
+        elif backend == "clean":
             import numpy as np
 
-            from ._mufflon import encode_body
+            from ._clean import encode_clean
 
             rgb = np.asarray(img.convert("RGB").resize((WIDTH, HEIGHT)), dtype=np.uint8)
-            body = bytearray(encode_body(rgb))
+            body = bytearray(encode_clean(rgb, cohere=cohere))
             if flibug:
                 from ._flibug import encode_flibug
 
                 encode_flibug(img, body, has_main=True)
-            obj = cls(bytes(body))
-            obj.flibug = flibug
-            return obj
-
-        bitmap, screen = encode_hires(img)
-        o1, l1 = _BITMAP_HI
-        o2, l2 = _BITMAP_LO
-        body = bytearray(NUFLI_BODY_SIZE)
-        body[o1 : o1 + l1] = bitmap[0:l1]
-        body[o2 : o2 + l2] = bitmap[l1 : l1 + l2]
-        for by in range(len(screen)):
-            for cx in range(40):
-                ink, paper = screen[by][cx]
-                body[NUIFLI_SCRAM[by] + cx] = ((ink & 0xF) << 4) | (paper & 0xF)
-        if third_colour:
-            from ._sprites import encode_sprites
-
-            px = img.convert("RGB").resize((WIDTH, HEIGHT)).load()
-
-            def bit(x, y):
-                return _bitmap_bit(bitmap, x, y)
-
-            sprite_bytes, sprite_cols = encode_sprites(px, bit, screen)
-            if _SPRITE_MAP is None:
-                _SPRITE_MAP = _sprite_addr_map()
-            for (y, col), val in sprite_bytes.items():
-                body[_SPRITE_MAP[(y, col)]] = val
-            for s in range(N_MAIN_SPRITES):
-                for lp in range(HEIGHT // 2):
-                    body[_SPRITE_COLOUR_BASE[s] + lp] = sprite_cols[s][lp] & 0xF
-        if flibug:
-            from ._flibug import encode_flibug
-
-            encode_flibug(img, body, has_main=third_colour)
+        else:
+            raise ValueError(f"unknown backend {backend!r} (expected 'clean' or 'mufflon')")
         obj = cls(bytes(body))
         obj.flibug = flibug
         return obj
@@ -223,7 +188,7 @@ class NufliImage:
         """The logical 8000-byte hi-res bitmap, reassembled from its two runs."""
         o1, l1 = _BITMAP_HI
         o2, l2 = _BITMAP_LO
-        return self.body[o1:o1 + l1] + self.body[o2:o2 + l2]
+        return self.body[o1 : o1 + l1] + self.body[o2 : o2 + l2]
 
     def screen_byte(self, col: int, line_pair: int) -> int:
         """Raw screen-RAM byte (ink<<4 | paper) for column ``col`` (0..39),

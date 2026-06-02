@@ -20,14 +20,14 @@ except Exception:  # pragma: no cover
     __version__ = "0.0.0"
 
 __all__ = [
-    "Nuvie",
+    "C64_PALETTE",
     "Control",
     "NufliImage",
+    "Nuvie",
     "Playlist",
     "Token",
     "TokenKind",
-    "C64_PALETTE",
+    "__version__",
     "build_movie",
     "build_slot",
-    "__version__",
 ]

@@ -17,10 +17,10 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
-import make_movie as mm  # noqa: E402
+import make_movie as mm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-from nuvie.nufli import NUIFLI_SCRAM, NufliImage  # noqa: E402
+from nuvie.nufli import NUIFLI_SCRAM, NufliImage
 
 IMAGE = "nuviemaker:local"
 N = 32  # frames to convert
@@ -51,9 +51,19 @@ def main() -> int:
             mm.make_frame(i).save(os.path.join(work, f"aa{i + 1:03d}.bmp"))
         # run mufflon on every bmp inside the image
         subprocess.run(
-            ["docker", "run", "--rm", "-v", f"{work}:/work", "--entrypoint", "bash", IMAGE,
-             "-c", "cd /work && for f in *.bmp; do mufflon $f --flibug -p --dither "
-                   "--prep_mode yuv >/dev/null 2>&1; done"],
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{work}:/work",
+                "--entrypoint",
+                "bash",
+                IMAGE,
+                "-c",
+                "cd /work && for f in *.bmp; do mufflon $f --flibug -p --dither "
+                "--prep_mode yuv >/dev/null 2>&1; done",
+            ],
             check=True,
         )
         ok = 0
@@ -62,7 +72,8 @@ def main() -> int:
             if not m:
                 continue
             frame = int(m.group(1)) - 1
-            img = NufliImage.from_prg(open(path, "rb").read())
+            with open(path, "rb") as f:
+                img = NufliImage.from_prg(f.read())
             got = _decode_barcode_index(img)
             status = "ok" if got == frame else "MISMATCH"
             if got != frame:

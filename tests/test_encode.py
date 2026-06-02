@@ -12,13 +12,13 @@ import sys
 
 import pytest
 
+from nuvie import slotmap
+from nuvie.encode import BITMAP_C64_BASE, BITMAP_SIZE, build_reu, encode_frame_slot
+from nuvie.reu import SLOT_SIZE, Nuvie
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "integration"))
 make_movie = pytest.importorskip("make_movie")
 pytest.importorskip("PIL")
-
-from nuvie import slotmap  # noqa: E402
-from nuvie.encode import BITMAP_C64_BASE, BITMAP_SIZE, build_reu, encode_frame_slot  # noqa: E402
-from nuvie.reu import SLOT_SIZE, Nuvie  # noqa: E402
 
 FRAMES = [0, 1, 2, 3, 14, 42, 100, 255, 256, 500, 767]
 

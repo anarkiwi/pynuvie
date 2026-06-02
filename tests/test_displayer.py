@@ -1,6 +1,7 @@
 """The displayer generator must byte-exactly reproduce NUVIEmaker's own generated
 displayer (captured by driving the real tool via vice-driver) for independent
 inputs -- proving the $33b0 generator port is correct and content-independent."""
+
 import os
 
 from nuvie._displayer import generate, DISPLAYER_LEN
