@@ -79,8 +79,32 @@ nuvie playlist movie.reu                   # full decoded playlist
 nuvie extract movie.reu -o frames/         # dump each frame as a .slot
 nuvie build frames/*.slot -o out.reu       # pack frame slots into a NUVIE
 nuvie encode clip.mp4 -o clip.reu          # video -> NUVIE
+nuvie music clip.reu --csv tune.csv        # attach a SID soundtrack from a CSV
 nuvie testpattern -o test.reu --style colour   # gradient showcase, no video needed
 ```
+
+### SID music from a CSV
+
+NUVIE stores its soundtrack as a stream of SID **register dumps** — 25 register
+values (`$D400..$D418`) for every 1/50 s tick. That maps onto a CSV with one row
+per tick and 25 integer columns (`0..255`, decimal or `0x` hex; a non-numeric
+header row is ignored):
+
+```sh
+nuvie music clip.reu --csv tune.csv             # add/loop music in place
+nuvie music clip.reu --csv tune.csv -o out.reu --restart   # write a copy, restart per loop
+nuvie encode clip.mp4 -o clip.reu --music tune.csv         # encode + score in one step
+```
+
+```python
+from nuvie import Nuvie, read_sid_csv
+movie = Nuvie.read("clip.reu")
+movie.set_music(read_sid_csv("tune.csv"))       # or flag=MUSIC_RESTART
+movie.write("clip.reu")
+```
+
+Music grows down from the top of the REU, so a scored movie holds fewer than the
+768 frames a silent one can.
 
 ## See it run
 

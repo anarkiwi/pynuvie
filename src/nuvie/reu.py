@@ -36,7 +36,7 @@ SID music, when present, is stored growing *downwards* from the top of the REU
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 from .playlist import Playlist
@@ -68,6 +68,8 @@ PLAYLIST_BANKS = PLAYLIST_SIZE // AUX_SIZE  # 128 banks (16..143)
 # Music grows downward from here (exclusive upper bound is $FFFFF5).
 MUSIC_TOP = 0xFFFFF4
 SID_REGS_PER_FRAME = 25
+MUSIC_LOOP = 0xE8  # $F0 flag: loop the tune
+MUSIC_RESTART = 0xF8  # $F0 flag: restart the tune each play-through
 
 
 def frame_location(frame: int) -> tuple:
@@ -274,6 +276,33 @@ class Nuvie:
         if not c.has_music or c.music_end <= c.music_start:
             return b""
         return bytes(self._data[c.music_start : c.music_end])
+
+    def set_music(self, data: bytes, flag: int = MUSIC_LOOP) -> None:
+        """Attach a SID-register stream as the soundtrack.
+
+        ``data`` is a flat sequence of ``SID_REGS_PER_FRAME`` (25) register values
+        per 1/50 s tick (see :mod:`nuvie.music`). It is laid out growing downward
+        from the top of the REU (last byte at ``$FFFFF4``); the control block's
+        music flag and start/end addresses are set to match. Note that music
+        consumes the top of the REU, so it reduces the number of frame slots that
+        remain free (a movie with music holds fewer than 768 frames)."""
+        if flag == 0:
+            raise ValueError("music flag must be non-zero (use MUSIC_LOOP or MUSIC_RESTART)")
+        if len(data) == 0 or len(data) % SID_REGS_PER_FRAME != 0:
+            raise ValueError(
+                f"music must be a non-empty multiple of {SID_REGS_PER_FRAME} bytes "
+                f"(one SID frame per 1/50 s), got {len(data)}"
+            )
+        end = MUSIC_TOP + 1  # exclusive upper bound ($FFFFF5)
+        start = end - len(data)
+        if start < 0:
+            raise ValueError("music stream is larger than the REU")
+        self._data[start:end] = data
+        self.set_control(replace(self.control, music=flag, music_start=start, music_end=end))
+
+    def clear_music(self) -> None:
+        """Disable the soundtrack (clears the music flag and addresses)."""
+        self.set_control(replace(self.control, music=0, music_start=0, music_end=0))
 
     def __len__(self) -> int:
         return MAX_FRAMES
