@@ -1,0 +1,3 @@
+# Keep the showcase GIFs (~8 MB) out of the sdist -- they are README assets served
+# from GitHub, not package data, and aren't needed to install or run pynuvie.
+recursive-exclude docs *.gif

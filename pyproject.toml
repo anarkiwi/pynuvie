@@ -47,7 +47,7 @@ fallback_version = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --cov=nuvie --cov-report=term-missing --cov-fail-under=85"
 
 [tool.ruff]
 line-length = 100
@@ -73,7 +73,8 @@ disable = [
     "invalid-name", "too-few-public-methods", "too-many-locals", "too-many-branches",
     "too-many-statements", "too-many-arguments", "too-many-positional-arguments",
     "too-many-nested-blocks",
-    "too-many-instance-attributes", "too-many-return-statements", "import-outside-toplevel",
+    "too-many-instance-attributes", "too-many-return-statements", "too-many-public-methods",
+    "import-outside-toplevel",
     "duplicate-code", "fixme", "consider-using-f-string", "use-dict-literal",
     "broad-exception-caught", "global-statement", "unbalanced-tuple-unpacking",
     "cyclic-import", "wrong-import-position",

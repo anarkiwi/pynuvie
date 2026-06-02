@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 
-from .reu import SLOT_SIZE, Nuvie
+from .reu import MUSIC_LOOP, MUSIC_RESTART, SID_REGS_PER_FRAME, SLOT_SIZE, Nuvie
 
 
 def _cmd_info(args) -> int:
@@ -64,6 +64,19 @@ def _cmd_build(args) -> int:
     return 0
 
 
+def _attach_music(reu_path, csv_path, restart) -> int:
+    """Read SID music from a CSV and write it into the .reu at ``reu_path``."""
+    from .music import read_sid_csv
+
+    data = read_sid_csv(csv_path)
+    movie = Nuvie.read(reu_path)
+    movie.set_music(data, flag=MUSIC_RESTART if restart else MUSIC_LOOP)
+    movie.write(reu_path)
+    ticks = len(data) // SID_REGS_PER_FRAME
+    print(f"added {ticks} SID frames (~{ticks / 50:.1f}s) of music to {reu_path}")
+    return ticks
+
+
 def _cmd_encode(args) -> int:
     from .encode import encode_video
 
@@ -74,8 +87,19 @@ def _cmd_encode(args) -> int:
         max_frames=args.max_frames,
         backend=args.backend,
         mufflon_bin=args.mufflon_bin,
+        workers=args.workers,
     )
     print(f"encoded {n} frames from {args.video} to {args.out}")
+    if args.music:
+        _attach_music(args.out, args.music, args.music_restart)
+    return 0
+
+
+def _cmd_music(args) -> int:
+    out = args.out or args.reu
+    if out != args.reu:
+        Nuvie.read(args.reu).write(out)
+    _attach_music(out, args.csv, args.restart)
     return 0
 
 
@@ -118,7 +142,21 @@ def main(argv=None) -> int:
     pn.add_argument("--max-frames", type=int, default=768)
     pn.add_argument("--backend", choices=("clean", "mufflon"), default="clean")
     pn.add_argument("--mufflon-bin", default=None)
+    pn.add_argument(
+        "--workers", type=int, default=0, help="parallel encode workers (0=auto per CPU, 1=serial)"
+    )
+    pn.add_argument("--music", default=None, help="CSV of SID register dumps to add as soundtrack")
+    pn.add_argument("--music-restart", action="store_true", help="restart music instead of looping")
     pn.set_defaults(func=_cmd_encode)
+
+    pm = sub.add_parser("music", help="attach SID music from a CSV of register dumps to a .reu")
+    pm.add_argument("reu")
+    pm.add_argument(
+        "--csv", required=True, help="CSV: 25 SID register values (0..255) per 1/50s row"
+    )
+    pm.add_argument("-o", "--out", default=None, help="write here instead of in place")
+    pm.add_argument("--restart", action="store_true", help="restart music instead of looping")
+    pm.set_defaults(func=_cmd_music)
 
     pt = sub.add_parser(
         "testpattern", help="generate an animated test-pattern .reu (no video needed)"
