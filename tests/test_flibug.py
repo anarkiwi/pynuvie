@@ -16,7 +16,7 @@ def _img(colour):
 def test_flibug_sets_body_and_flag():
     from nuvie.nufli import NufliImage
 
-    nuf = NufliImage.from_image(_img((0, 0, 200)), flibug=True)
+    nuf = NufliImage.from_image(_img((0, 0, 200)), backend="clean", flibug=True)
     assert nuf.flibug is True
     # the flibug initial colours + colour table got written
     assert nuf.body[0x1FF7] is not None
@@ -32,9 +32,9 @@ def test_flibug_changes_displayer_per_content():
     from nuvie.nufli import NufliImage
     from nuvie.palette import C64_PALETTE
 
-    plain = build_slot(NufliImage.from_image(_img(C64_PALETTE[0]), flibug=False))
-    green = build_slot(NufliImage.from_image(_img(C64_PALETTE[5]), flibug=True))
-    yellow = build_slot(NufliImage.from_image(_img(C64_PALETTE[7]), flibug=True))
+    plain = build_slot(NufliImage.from_image(_img(C64_PALETTE[0]), backend="clean", flibug=False))
+    green = build_slot(NufliImage.from_image(_img(C64_PALETTE[5]), backend="clean", flibug=True))
+    yellow = build_slot(NufliImage.from_image(_img(C64_PALETTE[7]), backend="clean", flibug=True))
     assert len(green) == SLOT_SIZE
     assert green != plain
     # left-edge content differs -> different packed slots
@@ -44,5 +44,5 @@ def test_flibug_changes_displayer_per_content():
 def test_flibug_implies_two_colour():
     from nuvie.nufli import NufliImage
 
-    nuf = NufliImage.from_image(_img((0, 0, 0)), third_colour=True, flibug=True)
+    nuf = NufliImage.from_image(_img((0, 0, 0)), backend="clean", flibug=True)
     assert nuf.flibug is True

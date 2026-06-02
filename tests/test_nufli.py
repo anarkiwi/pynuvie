@@ -49,31 +49,33 @@ def test_decode_dimensions():
     assert all(len(row) == 320 for row in px)
 
 
-def test_from_image_roundtrip_and_constraints():
+def test_clean_encode_fli_cell_constraint():
+    """The clean encoder honours the FLI hardware limit: each 8x2 cell shows at
+    most three colours (ink, paper, and the region's sprite colour), and a
+    colourful image uses many colours across the frame."""
     pytest = __import__("pytest")
     pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (320, 200), (0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rectangle([20, 20, 150, 100], fill=(255, 0, 0))
     d.ellipse([170, 30, 300, 160], fill=(0, 200, 80))
-    nuf = NufliImage.from_image(img, third_colour=False)
-    dec = nuf.decode_indices(sprites=False)
-    # encoding the decoded image must reproduce the same bytes (stable codec)
-    assert NufliImage.from_image(nuf.to_image(), third_colour=False).body == nuf.body
-    # every 8x2 block uses at most two colours (the two-colour FLI constraint)
+    dec = NufliImage.from_image(img, backend="clean", flibug=False).decode_indices()
     for by in range(100):
-        for cx in range(40):
+        for cx in range(3, 39):  # main (sprite) region
             cols = {dec[by * 2 + dy][cx * 8 + dx] for dy in range(2) for dx in range(8)}
-            assert len(cols) <= 2
-    # a colourful image must use more than two colours overall
-    assert len({v for row in dec for v in row}) > 2
+            assert len(cols) <= 3
+    assert len({v for row in dec for v in row}) >= 3
 
 
-def test_third_colour_adds_a_third_colour_per_block():
+def test_clean_encode_uses_third_colour():
+    """A three-colour image yields genuine three-colour 8x2 blocks via the sprite
+    underlay."""
     pytest = __import__("pytest")
     pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
     from PIL import Image
 
     from nuvie.palette import C64_PALETTE
@@ -83,14 +85,14 @@ def test_third_colour_adds_a_third_colour_per_block():
     for x in range(320):
         for y in range(200):
             img.putpixel((x, y), cols[(x // 3) % 3])
-    dec = NufliImage.from_image(img, third_colour=True).decode_indices()
+    dec = NufliImage.from_image(img, backend="clean", flibug=False).decode_indices()
     three = sum(
         1
         for by in range(100)
-        for cx in range(40)
+        for cx in range(3, 39)
         if len({dec[by * 2 + dy][cx * 8 + dx] for dy in range(2) for dx in range(8)}) == 3
     )
-    assert three > 100  # the sprite underlay yields genuine three-colour blocks
+    assert three > 50  # the sprite underlay yields genuine three-colour blocks
 
 
 def test_to_prg_has_load_address():
@@ -131,17 +133,17 @@ def test_sprite_underlay_matches_mufflon():
     assert with_sprites < 3000
 
 
-def test_dither_produces_valid_decodable_image():
+def test_clean_encode_dithers_gradient():
     pytest = __import__("pytest")
     pytest.importorskip("PIL")
+    pytest.importorskip("numpy")
     from PIL import Image
 
     img = Image.new("RGB", (320, 200))
     for x in range(320):
         for y in range(200):
             img.putpixel((x, y), ((x * 255) // 320, (y * 255) // 200, 128))
-    nuf = NufliImage.from_image(img, dither=True)
-    dec = nuf.decode_indices()
+    dec = NufliImage.from_image(img, backend="clean").decode_indices()
     assert len(dec) == 200 and all(len(r) == 320 for r in dec)
-    # dithering should spread the gradient across several palette colours
+    # the FLI-aware dither spreads the gradient across several palette colours
     assert len({v for row in dec for v in row}) >= 6

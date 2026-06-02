@@ -55,14 +55,12 @@ def frames(n: int = 64) -> Iterator:
         yield make_frame(i)
 
 
-def build(out_path: str, n: int = 64, third_colour: bool = False, dither: bool = False,
-          flibug: bool = True):
+def build(out_path: str, n: int = 64, backend: str = "clean", flibug: bool = True):
     """Encode an ``n``-frame test pattern into a playable NUVIE ``.reu``.
 
-    The pattern is flat (bars / blocks) so it uses clean two-colour hi-res. With
-    ``flibug`` (default) the left-24px edge is generated so it follows the pattern.
+    The pattern is flat (bars / blocks). With ``flibug`` (default) the left-24px
+    edge is generated so it follows the pattern.
     """
     from .pack import build_movie
 
-    return build_movie(frames(n), out_path, third_colour=third_colour, dither=dither,
-                       flibug=flibug)
+    return build_movie(frames(n), out_path, backend=backend, flibug=flibug)
