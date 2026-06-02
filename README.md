@@ -78,7 +78,7 @@ nuvie info movie.reu                       # signature, frame count, music, play
 nuvie playlist movie.reu                   # full decoded playlist
 nuvie extract movie.reu -o frames/         # dump each frame as a .slot
 nuvie build frames/*.slot -o out.reu       # pack frame slots into a NUVIE
-nuvie encode clip.mp4 -o clip.reu          # video -> NUVIE
+nuvie encode clip.mp4 -o clip.reu          # video -> NUVIE (parallel; --workers N)
 nuvie music clip.reu --csv tune.csv        # attach a SID soundtrack from a CSV
 nuvie testpattern -o test.reu --style colour   # gradient showcase, no video needed
 ```

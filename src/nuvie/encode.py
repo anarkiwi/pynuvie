@@ -114,6 +114,7 @@ def encode_video(
     flibug: bool = True,
     cohere: float = 600.0,
     mufflon_bin=None,
+    workers: int = 1,
 ) -> int:
     """Encode a video file into a full-colour, player-ready NUVIE ``.reu``.
 
@@ -121,12 +122,19 @@ def encode_video(
     pynuvie FLI-aware encoder, or ``"mufflon"`` to drive the real binary; plus the
     generated left-24px flibug edge when ``flibug`` is set), packs them into REU
     slots with NUVIEmaker's layout, and writes a sequential-playback ``.reu`` that
-    runs on the reference player. Returns the frame count.
+    runs on the reference player. Returns the frame count. ``workers`` parallelises
+    the per-frame encode (0 = auto per CPU, 1 = serial).
     """
     from .pack import build_movie
 
     frames = list(_video_frames(video, fps, max_frames))
     build_movie(
-        frames, out_path, backend=backend, flibug=flibug, cohere=cohere, mufflon_bin=mufflon_bin
+        frames,
+        out_path,
+        backend=backend,
+        flibug=flibug,
+        cohere=cohere,
+        mufflon_bin=mufflon_bin,
+        workers=workers,
     )
     return len(frames)

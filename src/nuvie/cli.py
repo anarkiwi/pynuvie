@@ -87,6 +87,7 @@ def _cmd_encode(args) -> int:
         max_frames=args.max_frames,
         backend=args.backend,
         mufflon_bin=args.mufflon_bin,
+        workers=args.workers,
     )
     print(f"encoded {n} frames from {args.video} to {args.out}")
     if args.music:
@@ -141,6 +142,9 @@ def main(argv=None) -> int:
     pn.add_argument("--max-frames", type=int, default=768)
     pn.add_argument("--backend", choices=("clean", "mufflon"), default="clean")
     pn.add_argument("--mufflon-bin", default=None)
+    pn.add_argument(
+        "--workers", type=int, default=0, help="parallel encode workers (0=auto per CPU, 1=serial)"
+    )
     pn.add_argument("--music", default=None, help="CSV of SID register dumps to add as soundtrack")
     pn.add_argument("--music-restart", action="store_true", help="restart music instead of looping")
     pn.set_defaults(func=_cmd_encode)

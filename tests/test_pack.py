@@ -9,6 +9,16 @@ from nuvie.reu import MAX_FRAMES, SLOT_SIZE, Nuvie
 FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
+def test_build_movie_parallel_matches_serial():
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    imgs = [Image.new("RGB", (320, 200), (c, 0, 255 - c)) for c in (10, 120, 230)]
+    serial = build_movie(list(imgs)).to_bytes()
+    parallel = build_movie(list(imgs), workers=3).to_bytes()
+    assert parallel == serial  # parallel encode must be byte-identical to serial
+
+
 def test_build_slot_matches_real_nuviemaker_slot():
     """Packing a real mufflon .nuf must reproduce the slot NUVIEmaker itself
     produced (captured from the C64), to within the handful of displayer-setup

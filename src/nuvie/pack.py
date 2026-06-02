@@ -10,8 +10,9 @@ player-displayer stub at ``$1000-$1FFF`` that NUVIEmaker supplies. We ship that
 stub and the non-graphics fixed bytes as ``data/pack_source.bin`` and overlay the
 encoder's graphics on top, then apply the descriptor table.
 
-A pure-Python slot built this way matches NUVIEmaker's real packed slot to 99.9%
-and plays correctly on ``nuvieplayer1.0.prg``.
+A pure-Python slot built this way reproduces NUVIEmaker's real packed slot
+byte-for-byte (verified by injecting the same source into the real NUVIEmaker
+under VICE and diffing the REU) and plays correctly on ``nuvieplayer1.0.prg``.
 
 The pack table and the displayer stub are derived from Crest's NUVIEmaker and are
 included here, with attribution, solely to interoperate with the NUVIE format.
@@ -20,7 +21,10 @@ included here, with attribution, solely to interoperate with the NUVIE format.
 from __future__ import annotations
 
 import json
+import os
+from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
+from itertools import islice
 from typing import List, Optional
 
 from .nufli import (
@@ -126,6 +130,27 @@ def _sequential_playlist(n: int):
     return Playlist(tokens)
 
 
+def _encode_slot(task) -> bytes:
+    """Encode one image to its packed frame slot (top-level so it is picklable)."""
+    img, backend, flibug, cohere, mufflon_bin = task
+    nuf = NufliImage.from_image(
+        img, backend=backend, flibug=flibug, cohere=cohere, mufflon_bin=mufflon_bin
+    )
+    return build_slot(nuf)
+
+
+def _pin_blas_threads() -> None:
+    """Worker initialiser: one BLAS thread per process so the pool doesn't
+    oversubscribe cores (each frame encode is already CPU-bound on its own)."""
+    for var in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ.setdefault(var, "1")
+
+
 def build_movie(
     images,
     out_path: Optional[str] = None,
@@ -133,6 +158,7 @@ def build_movie(
     flibug: bool = True,
     cohere: float = 600.0,
     mufflon_bin=None,
+    workers: int = 1,
 ) -> Nuvie:
     """Encode an iterable of Pillow images into a full-colour NUVIE.
 
@@ -141,17 +167,27 @@ def build_movie(
     play-through playlist is generated. With ``flibug`` (default) the left-24px
     edge is generated so it follows the picture instead of showing VIC FLI-bug
     corruption.
+
+    Frame encoding is independent per frame, so ``workers`` spreads it across a
+    process pool: ``1`` (default) encodes serially; ``>1`` uses that many workers;
+    ``<=0`` uses one per CPU. The numba kernel's on-disk cache is shared across
+    workers, so only the first pays the compile cost.
     """
     movie = Nuvie()
-    n = 0
-    for i, img in enumerate(images):
-        if i >= MAX_FRAMES:
-            break
-        nuf = NufliImage.from_image(
-            img, backend=backend, flibug=flibug, cohere=cohere, mufflon_bin=mufflon_bin
-        )
-        movie.set_frame(i, build_slot(nuf))
-        n = i + 1
+    frames = list(islice(images, MAX_FRAMES))
+    n = len(frames)
+    tasks = [(img, backend, flibug, cohere, mufflon_bin) for img in frames]
+
+    if workers != 1 and n > 1:
+        auto = min(32, os.cpu_count() or 1)  # cap auto so we don't spawn a heavy process per core
+        nw = min(workers if workers > 0 else auto, n)
+        with ProcessPoolExecutor(max_workers=nw, initializer=_pin_blas_threads) as pool:
+            for i, slot in enumerate(pool.map(_encode_slot, tasks, chunksize=1)):
+                movie.set_frame(i, slot)
+    else:
+        for i, task in enumerate(tasks):
+            movie.set_frame(i, _encode_slot(task))
+
     movie.set_playlist(_sequential_playlist(n))
     if out_path:
         movie.write(out_path)
