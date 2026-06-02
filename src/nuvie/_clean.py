@@ -51,9 +51,14 @@ def _sprite_of_col(c):
     return (c - 3) // 6 if 3 <= c <= 38 else -1
 
 
-def encode_clean(rgb: np.ndarray, iters: int = 3) -> bytearray:
+def encode_clean(rgb: np.ndarray, iters: int = 3, cohere: float = 600.0) -> bytearray:
     """FLI-aware encode of ``rgb`` (200,320,3) to a NUFLI body. Fills the main
-    image (char cols 3..39); cols 0..2 are left for the flibug edge."""
+    image (char cols 3..39); cols 0..2 are left for the flibug edge.
+
+    ``cohere`` is the vertical-coherence penalty (cost units) for changing a
+    cell's ink/paper or a region's sprite colour from the line-pair above; higher
+    keeps colours more stable across a region (less streaking) at some accuracy."""
+    COHERE = cohere
     pal = _yuv(np.array(C64_PALETTE, dtype=np.float64))     # (16,3)
     img = _yuv(rgb.astype(np.float64))                      # (200,320,3)
 
@@ -72,26 +77,35 @@ def encode_clean(rgb: np.ndarray, iters: int = 3) -> bytearray:
     paper = np.zeros((100, 40), int)
     spr = np.full((100, 6), -1, int)
 
-    # --- co-design: alternate (ink/paper per cell) and (sprite per region) ---
-    for _ in range(iters):
-        for lp in range(100):
+    # --- co-design with vertical coherence ---
+    # Process line-pairs top to bottom; for each cell's ink/paper and each region's
+    # sprite colour, add a penalty for differing from the line-pair above. This keeps
+    # colours stable across a region (like mufflon's globally-coherent dither +
+    # switch continuity) instead of churning per line-pair, which would streak.
+    iv = np.arange(16)
+    for lp in range(100):
+        for _ in range(iters):
             for c in range(40):
                 d = cd[lp][c]                                # (16px,16col)
                 s = spr[lp, _sprite_of_col(c)] if 0 <= _sprite_of_col(c) else -1
                 base = d[:, s] if s >= 0 else np.full(16, 1e18)
                 m = np.minimum(d, base[:, None])             # best of (k, sprite) per px
                 cij = np.minimum(m[:, :, None], m[:, None, :]).sum(0)  # (16,16) pair cost
+                if lp > 0:                                   # coherence vs cell above
+                    prev = {int(ink[lp - 1, c]), int(paper[lp - 1, c])}
+                    new = (~np.isin(iv, list(prev))).astype(float) * COHERE
+                    cij = cij + new[:, None] + new[None, :]
                 i, j = np.unravel_index(int(np.argmin(cij)), (16, 16))
                 ink[lp, c], paper[lp, c] = i, j
-        for lp in range(100):
             for s in range(6):
                 cols = range(3 + 6 * s, 9 + 6 * s)
-                # cost of sprite colour k = sum over region px of min(d_ink,d_pap,d_k)
-                ck = np.zeros(16)
+                ck = np.zeros(16)                            # cost of sprite colour k
                 for c in cols:
                     d = cd[lp][c]
-                    bb = np.minimum(d[:, ink[lp, c]], d[:, paper[lp, c]])   # (16px,)
+                    bb = np.minimum(d[:, ink[lp, c]], d[:, paper[lp, c]])
                     ck += np.minimum(bb[:, None], d).sum(0)
+                if lp > 0:                                   # coherence vs region above
+                    ck = ck + (iv != int(spr[lp - 1, s])).astype(float) * COHERE
                 spr[lp, s] = int(np.argmin(ck))
 
     # --- 2px-pair Floyd-Steinberg to each cell's {ink,paper,sprite}, with feedback ---
