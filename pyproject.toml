@@ -47,7 +47,7 @@ fallback_version = "0.0.0"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --cov=nuvie --cov-report=term-missing --cov-fail-under=85"
 
 [tool.ruff]
 line-length = 100

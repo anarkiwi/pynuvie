@@ -30,4 +30,4 @@ jobs:
           black --check src tests research
           pylint src tests
       - name: Test
-        run: pytest --cov=nuvie --cov-report=term-missing
+        run: pytest   # coverage + --cov-fail-under=85 come from pyproject addopts
