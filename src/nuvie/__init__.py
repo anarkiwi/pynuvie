@@ -14,10 +14,10 @@ from .playlist import Playlist, Token, TokenKind
 from .reu import Control, Nuvie
 
 try:
-    from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
 
     __version__ = version("pynuvie")
-except Exception:  # pragma: no cover
+except PackageNotFoundError:  # pragma: no cover
     __version__ = "0.0.0"
 
 __all__ = [

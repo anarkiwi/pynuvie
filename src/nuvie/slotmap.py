@@ -17,20 +17,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from functools import lru_cache
+from importlib.resources import files
 
-try:
-    from importlib.resources import files
 
-    def _load_raw() -> list:
-        return json.loads((files("nuvie.data") / "slotmap.json").read_text(encoding="utf-8"))
-
-except Exception:  # pragma: no cover
-    import os
-
-    def _load_raw() -> list:
-        here = os.path.join(os.path.dirname(__file__), "data", "slotmap.json")
-        with open(here, encoding="utf-8") as f:
-            return json.load(f)
+def _load_raw() -> list:
+    return json.loads((files("nuvie.data") / "slotmap.json").read_text(encoding="utf-8"))
 
 
 from .reu import PART1_SIZE, PART2_BASE
