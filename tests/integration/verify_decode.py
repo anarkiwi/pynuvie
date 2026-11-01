@@ -61,8 +61,10 @@ def main() -> int:
                 "bash",
                 IMAGE,
                 "-c",
-                "cd /work && for f in *.bmp; do mufflon $f --flibug -p --dither "
-                "--prep_mode yuv >/dev/null 2>&1; done",
+                (
+                    "cd /work && for f in *.bmp; do mufflon $f --flibug -p --dither "
+                    "--prep_mode yuv >/dev/null 2>&1; done"
+                ),
             ],
             check=True,
         )

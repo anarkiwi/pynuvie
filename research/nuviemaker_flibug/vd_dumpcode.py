@@ -1,10 +1,12 @@
-import subprocess, time, logging
+import logging
+import subprocess
+import time
 
 logging.basicConfig(level=logging.ERROR)
 from vice_driver import BinMon
 from vice_driver.binmon import TAP_MODE_FIXED
-from vice_driver.screen import parse_screen_response
 from vice_driver.keys import chord_to_keys, text_to_chords
+from vice_driver.screen import parse_screen_response
 
 cid = subprocess.run(
     [
@@ -20,10 +22,12 @@ cid = subprocess.run(
         "bash",
         "nuviemaker:local",
         "-c",
-        "mkdir -p /root/.local/state/vice /root/.config/vice /root/.cache/vice && "
-        "exec /usr/local/bin/x64sc -default -binarymonitor -binarymonitoraddress ip4://0.0.0.0:6502 "
-        "-warp -sounddev dummy -8 /work/nuvie.d64 -drive8type 1541 "
-        "-reu -reusize 16384 -reuimage /work/out.reu -reuimagerw -autostart /work/nuvie.d64",
+        (
+            "mkdir -p /root/.local/state/vice /root/.config/vice /root/.cache/vice && "
+            "exec /usr/local/bin/x64sc -default -binarymonitor -binarymonitoraddress ip4://0.0.0.0:6502 "
+            "-warp -sounddev dummy -8 /work/nuvie.d64 -drive8type 1541 "
+            "-reu -reusize 16384 -reuimage /work/out.reu -reuimagerw -autostart /work/nuvie.d64"
+        ),
     ],
     capture_output=True,
     text=True,

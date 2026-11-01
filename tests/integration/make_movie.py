@@ -26,14 +26,13 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
-from typing import List, Tuple
 
 WIDTH, HEIGHT = 320, 200
 DEFAULT_FRAMES = 256  # ~20s at 12.5fps; spans 86 REU banks (3 frames/bank)
 FPS = 12
 
 # Pepto C64 palette (index -> RGB).
-C64_PALETTE: List[Tuple[int, int, int]] = [
+C64_PALETTE: list[tuple[int, int, int]] = [
     (0x00, 0x00, 0x00),  # 0 black
     (0xFF, 0xFF, 0xFF),  # 1 white
     (0x81, 0x33, 0x38),  # 2 red
@@ -72,13 +71,13 @@ SWATCH_X0 = 48
 SWATCH_W = 16  # 16 colours * 16px = 256px, x 48..304
 
 
-def barcode_cell_centers() -> List[Tuple[int, int]]:
+def barcode_cell_centers() -> list[tuple[int, int]]:
     """Pixel centre of each barcode cell (incl. both guards), left to right."""
     cy = BARCODE_Y0 + CELL_H // 2
     return [(BARCODE_X0 + c * CELL_W + CELL_W // 2, cy) for c in range(N_CELLS)]
 
 
-def expected_bits(i: int) -> List[int]:
+def expected_bits(i: int) -> list[int]:
     """Expected cell values for frame ``i``: [guard, bitN-1..bit0, guard]."""
     bits = [(i >> b) & 1 for b in range(BARCODE_BITS - 1, -1, -1)]
     return [1, *bits, 1]

@@ -33,11 +33,11 @@ except ImportError:  # pragma: no cover
 
 
 from .nufli import (
-    NUFLI_BODY_SIZE,
-    NUIFLI_SCRAM,
     _BITMAP_HI,
     _BITMAP_LO,
     _SPRITE_COLOUR_BASE,
+    NUFLI_BODY_SIZE,
+    NUIFLI_SCRAM,
     _sprite_addr_map,
 )
 from .palette import C64_PALETTE
