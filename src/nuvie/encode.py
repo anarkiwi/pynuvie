@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 import subprocess
 import tempfile
-from typing import List, Optional
 
 from .nufli import HEIGHT, WIDTH
 from .palette import LUMA, nearest_index
@@ -24,7 +23,7 @@ BITMAP_C64_BASE = 0xE000
 BITMAP_SIZE = 8000
 
 
-def _hires_bitmap(indices: List[List[int]], ink: int, paper: int) -> bytearray:
+def _hires_bitmap(indices: list[list[int]], ink: int, paper: int) -> bytearray:
     """Standard C64 hi-res bitmap: bit set where the pixel is closer to ink."""
     bmp = bytearray(BITMAP_SIZE)
     ink_luma, paper_luma = LUMA[ink], LUMA[paper]
@@ -37,7 +36,7 @@ def _hires_bitmap(indices: List[List[int]], ink: int, paper: int) -> bytearray:
     return bmp
 
 
-def _quantise(img) -> List[List[int]]:
+def _quantise(img) -> list[list[int]]:
     img = img.convert("RGB").resize((WIDTH, HEIGHT))
     px = img.load()
     return [[nearest_index(px[x, y]) for x in range(WIDTH)] for y in range(HEIGHT)]
@@ -83,7 +82,7 @@ def _video_frames(video: str, fps: float, max_frames: int):
             yield Image.open(os.path.join(td, n))
 
 
-def build_reu(frame_slots: List[bytes], out_path: Optional[str] = None) -> Nuvie:
+def build_reu(frame_slots: list[bytes], out_path: str | None = None) -> Nuvie:
     """Pack frame slots into a NUVIE with a sequential play-through playlist."""
     from .playlist import Playlist, Token
 

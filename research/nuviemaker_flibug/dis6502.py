@@ -188,29 +188,29 @@ def fmt(pc, mn, md, data):
     if md == "imp" or md == "acc":
         return mn
     if md == "imm":
-        return "%s #$%02x" % (mn, data[0])
+        return f"{mn} #${data[0]:02x}"
     if md == "zp":
-        return "%s $%02x" % (mn, data[0])
+        return f"{mn} ${data[0]:02x}"
     if md == "zpx":
-        return "%s $%02x,X" % (mn, data[0])
+        return f"{mn} ${data[0]:02x},X"
     if md == "zpy":
-        return "%s $%02x,Y" % (mn, data[0])
+        return f"{mn} ${data[0]:02x},Y"
     if md == "izx":
-        return "%s ($%02x,X)" % (mn, data[0])
+        return f"{mn} (${data[0]:02x},X)"
     if md == "izy":
-        return "%s ($%02x),Y" % (mn, data[0])
+        return f"{mn} (${data[0]:02x}),Y"
     if md == "rel":
         t = (pc + 2 + ((data[0] ^ 0x80) - 0x80)) & 0xFFFF
-        return "%s $%04x" % (mn, t)
+        return f"{mn} ${t:04x}"
     a = data[0] | (data[1] << 8)
     if md == "abs":
-        return "%s $%04x" % (mn, a)
+        return f"{mn} ${a:04x}"
     if md == "abx":
-        return "%s $%04x,X" % (mn, a)
+        return f"{mn} ${a:04x},X"
     if md == "aby":
-        return "%s $%04x,Y" % (mn, a)
+        return f"{mn} ${a:04x},Y"
     if md == "ind":
-        return "%s ($%04x)" % (mn, a)
+        return f"{mn} (${a:04x})"
 
 
 def disasm(mem, base, start, end):
@@ -219,7 +219,7 @@ def disasm(mem, base, start, end):
     while pc < end:
         op = mem[pc - base]
         if op not in OPC:
-            out.append((pc, ".byte $%02x" % op, 1))
+            out.append((pc, f".byte ${op:02x}", 1))
             pc += 1
             continue
         mn, md = OPC[op]
@@ -237,4 +237,4 @@ if __name__ == "__main__":
     end = int(sys.argv[4], 16)
     mem = open(f, "rb").read()
     for pc, txt, sz in disasm(mem, base, start, end):
-        print("$%04x: %s" % (pc, txt))
+        print(f"${pc:04x}: {txt}")

@@ -27,7 +27,6 @@ byte-exact against its generated displayers for two independent inputs -- see
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import List
 
 DISPLAYER_LEN = 0x0EE4  # 3812 bytes ($1000-$1EE3)
 
@@ -44,7 +43,7 @@ _COL_COLOUR_OFF = (None, 0x0B, 0x10, 0x15, 0x1A, 0x1F)
 _COL_REG_OFF = (0x08, 0x0D, 0x12, 0x17, 0x1C, 0x21)
 
 # cumulative output offset of each of the 100 blocks (block length = 40 - start).
-_BASES: List[int] = []
+_BASES: list[int] = []
 _p = 0
 for _x in range(100):
     _BASES.append(_p)

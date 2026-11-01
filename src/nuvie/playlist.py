@@ -36,9 +36,9 @@ playlists round-trip losslessly.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, List
 
 
 class TokenKind(Enum):
@@ -189,16 +189,16 @@ class Token:
 class Playlist:
     """An ordered list of :class:`Token` describing playback."""
 
-    tokens: List[Token]
+    tokens: list[Token]
 
     @classmethod
-    def parse(cls, data: bytes, *, stop_at_end: bool = True) -> "Playlist":
+    def parse(cls, data: bytes, *, stop_at_end: bool = True) -> Playlist:
         """Parse a raw playlist byte stream into tokens.
 
         If ``stop_at_end`` is set (the default), parsing stops after the first
         ``ey``/``fy`` end token, which terminates a NUVIE playlist.
         """
-        tokens: List[Token] = []
+        tokens: list[Token] = []
         for i in range(0, len(data) - 1, 2):
             tok = Token(data[i], data[i + 1])
             tokens.append(tok)

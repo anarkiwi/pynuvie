@@ -21,12 +21,12 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from nuvie._clean import encode_clean  # noqa: E402
-from nuvie._flibug import encode_flibug  # noqa: E402
-from nuvie.nufli import NufliImage  # noqa: E402
-from nuvie.pack import build_slot, _sequential_playlist  # noqa: E402
-from nuvie.palette import C64_PALETTE  # noqa: E402
-from nuvie.reu import Nuvie  # noqa: E402
+from nuvie._clean import encode_clean
+from nuvie._flibug import encode_flibug
+from nuvie.nufli import NufliImage
+from nuvie.pack import _sequential_playlist, build_slot
+from nuvie.palette import C64_PALETTE
+from nuvie.reu import Nuvie
 
 PLAYER = os.environ.get("NUVIE_PLAYER", "/scratch/tmp/nuvieplayer1.0.prg")
 IMAGE = os.environ.get("NUVIE_DOCKER", "asid-vice:latest")
@@ -59,11 +59,13 @@ def screenshot(reu, out_png, cycles=40000000):
             "bash",
             IMAGE,
             "-c",
-            "mkdir -p /root/.local/state/vice /root/.config/vice /root/.cache/vice; "
-            "export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy; "
-            f"timeout 90 x64sc -warp -limitcycles {cycles} -reu -reusize 16384 "
-            "-reuimage /work/movie.reu -reuimagerw -autostart /work/player.prg "
-            "-exitscreenshot /work/shot.png >/work/log 2>&1",
+            (
+                "mkdir -p /root/.local/state/vice /root/.config/vice /root/.cache/vice; "
+                "export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy; "
+                f"timeout 90 x64sc -warp -limitcycles {cycles} -reu -reusize 16384 "
+                "-reuimage /work/movie.reu -reuimagerw -autostart /work/player.prg "
+                "-exitscreenshot /work/shot.png >/work/log 2>&1"
+            ),
         ],
         check=False,
     )

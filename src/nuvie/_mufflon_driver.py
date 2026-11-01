@@ -16,10 +16,22 @@ import subprocess
 import tempfile
 
 # makenuvie's video settings (YUV prep + dither, Pepto palette).
-_FLAGS = (
-    "--otype nufli -p --dither --prep_mode yuv --weight_u 1 --weight_v 0.5 "
-    "--dest-palette pepto --no-truncate --shutup"
-).split()
+_FLAGS = [
+    "--otype",
+    "nufli",
+    "-p",
+    "--dither",
+    "--prep_mode",
+    "yuv",
+    "--weight_u",
+    "1",
+    "--weight_v",
+    "0.5",
+    "--dest-palette",
+    "pepto",
+    "--no-truncate",
+    "--shutup",
+]
 
 
 def find_mufflon(mufflon_bin: str | None = None) -> str:

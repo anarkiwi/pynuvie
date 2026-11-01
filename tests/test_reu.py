@@ -1,5 +1,6 @@
 import pytest
 
+from nuvie.playlist import Playlist, Token
 from nuvie.reu import (
     MAX_FRAMES,
     REU_SIZE,
@@ -10,7 +11,6 @@ from nuvie.reu import (
     part1_offset,
     part2_offset,
 )
-from nuvie.playlist import Playlist, Token
 
 
 def test_empty_is_valid_and_sized():

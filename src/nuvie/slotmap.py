@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import List
 
 try:
     from importlib.resources import files
@@ -56,7 +55,7 @@ class Run:
 
 
 @lru_cache(maxsize=1)
-def runs() -> List[Run]:
+def runs() -> list[Run]:
     """The slot->C64 transfer runs used by the reference player.
 
     ``slot`` is an index into the 21840-byte part1+part2 frame slot."""

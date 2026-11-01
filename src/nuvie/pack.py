@@ -25,15 +25,14 @@ import os
 from concurrent.futures import ProcessPoolExecutor
 from functools import lru_cache
 from itertools import islice
-from typing import List, Optional
 
 from .nufli import (
     _BITMAP_HI,
     _BITMAP_LO,
-    NUIFLI_SCRAM,
-    N_MAIN_SPRITES,
-    NufliImage,
     _SPRITE_COLOUR_BASE,
+    N_MAIN_SPRITES,
+    NUIFLI_SCRAM,
+    NufliImage,
     _sprite_addr_map,
 )
 from .reu import MAX_FRAMES, SLOT_SIZE, Nuvie
@@ -58,7 +57,7 @@ def _pack_source() -> bytes:
 
 
 @lru_cache(maxsize=1)
-def _pack_table() -> List[dict]:
+def _pack_table() -> list[dict]:
     return json.loads(_data_path("pack_table.json").read_text())
 
 
@@ -97,7 +96,7 @@ def build_slot(image: NufliImage) -> bytes:
     for o in _graphics_offsets():  # overlay the encoder's graphics (C64 $2000+o)
         src[o + 0x1000] = body[o]
     if getattr(image, "flibug", False):
-        from ._displayer import generate, DISPLAYER_LEN, COLOUR_COLS
+        from ._displayer import COLOUR_COLS, DISPLAYER_LEN, generate
         from ._flibug import _sprite_offsets
 
         # overlay the flibug graphics the main _graphics_offsets pass doesn't cover
@@ -153,7 +152,7 @@ def _pin_blas_threads() -> None:
 
 def build_movie(
     images,
-    out_path: Optional[str] = None,
+    out_path: str | None = None,
     backend: str = "clean",
     flibug: bool = True,
     cohere: float = 600.0,

@@ -4,7 +4,7 @@ inputs -- proving the $33b0 generator port is correct and content-independent.""
 
 import os
 
-from nuvie._displayer import generate, DISPLAYER_LEN
+from nuvie._displayer import DISPLAYER_LEN, generate
 
 REF = os.path.join(os.path.dirname(__file__), "..", "research", "nuviemaker_flibug")
 

@@ -20,10 +20,8 @@ mufflon; the displayer side is validated byte-exact in
 
 from __future__ import annotations
 
-from typing import List, Optional
-
-from .palette import C64_PALETTE
 from .nufli import NUIFLI_SCRAM
+from .palette import C64_PALETTE
 
 WIDTH, HEIGHT, FLI = 320, 200, 0x18
 INK, PAPER = 0, 1
@@ -78,7 +76,7 @@ _FM = (
     + [0x0040, 0x0080, 0x00C0, 0x0000] * 4
 )
 
-_SP_OFF: Optional[tuple] = None
+_SP_OFF: tuple | None = None
 
 
 def _sprite_offsets():
@@ -119,6 +117,7 @@ def encode_flibug(img, body: bytearray, has_main: bool = False) -> None:
     into free slots (columns whose main colour is unchanged), so the underlay and
     the flibug coexist."""
     import numpy as np
+
     from ._displayer import COLOUR_COLS
 
     ho, mo = _sprite_offsets()
@@ -203,7 +202,7 @@ def encode_flibug(img, body: bytearray, has_main: bool = False) -> None:
                         best_cost, best = c, trial
         return best
 
-    fb: List[List[int]] = []
+    fb: list[list[int]] = []
     inkpap = []
     for lp in range(100):
         c = pick_colours(lp)

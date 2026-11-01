@@ -37,7 +37,6 @@ SID music, when present, is stored growing *downwards* from the top of the REU
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional
 
 from .playlist import Playlist
 
@@ -104,7 +103,7 @@ class Control:
     unused: int = 0  # $FF
 
     @classmethod
-    def from_bytes(cls, aux: bytes) -> "Control":
+    def from_bytes(cls, aux: bytes) -> Control:
         if len(aux) < AUX_SIZE:
             raise ValueError("control block must be 16 bytes")
         return cls(
@@ -152,7 +151,7 @@ class Nuvie:
     """A NUVIE REU image. Read with :meth:`read`/:meth:`from_bytes`, write with
     :meth:`write`/:meth:`to_bytes`. Frames are accessed as raw 21840-byte slots."""
 
-    def __init__(self, data: Optional[bytearray] = None):
+    def __init__(self, data: bytearray | None = None):
         if data is None:
             data = bytearray(REU_SIZE)
             self._data = data
@@ -165,11 +164,11 @@ class Nuvie:
 
     # --- construction ---
     @classmethod
-    def from_bytes(cls, data: bytes) -> "Nuvie":
+    def from_bytes(cls, data: bytes) -> Nuvie:
         return cls(bytearray(data))
 
     @classmethod
-    def read(cls, path: str) -> "Nuvie":
+    def read(cls, path: str) -> Nuvie:
         with open(path, "rb") as f:
             return cls(bytearray(f.read()))
 

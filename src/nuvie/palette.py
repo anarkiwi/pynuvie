@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
-
 # Index -> (R, G, B). The "Pepto" PAL palette -- the same values mufflon encodes
 # against (its palette_pepto), so pynuvie's colour choices match mufflon's and the
 # reference player's rendering.
-C64_PALETTE: List[Tuple[int, int, int]] = [
+C64_PALETTE: list[tuple[int, int, int]] = [
     (0x00, 0x00, 0x00),  # 0 black
     (0xFF, 0xFF, 0xFF),  # 1 white
     (0x68, 0x37, 0x2B),  # 2 red
@@ -27,10 +25,10 @@ C64_PALETTE: List[Tuple[int, int, int]] = [
 ]
 
 # Perceived luma per palette index (Rec. 601), useful for nearest-colour work.
-LUMA: List[float] = [0.299 * r + 0.587 * g + 0.114 * b for (r, g, b) in C64_PALETTE]
+LUMA: list[float] = [0.299 * r + 0.587 * g + 0.114 * b for (r, g, b) in C64_PALETTE]
 
 
-def nearest_index(rgb: Tuple[int, int, int]) -> int:
+def nearest_index(rgb: tuple[int, int, int]) -> int:
     """Nearest C64 palette index to an RGB triple (squared-distance)."""
     r, g, b = rgb
     best_i, best_d = 0, 1 << 30
