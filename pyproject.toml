@@ -7,7 +7,7 @@ name = "pynuvie"
 dynamic = ["version"]
 description = "Read, write and document Commodore 64 NUVIE REU video files."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Josh Bailey", email = "josh@overlyspecific.com" }]
@@ -55,7 +55,7 @@ src = ["src", "tests"]
 
 [tool.black]
 line-length = 100
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.pylint.main]
 # numba is imported lazily inside functions; don't fail if it isn't installed.
